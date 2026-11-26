@@ -1,6 +1,6 @@
 # bamf
 
-> *BAMF!* — the sound Nightcrawler makes when he teleports.
+> *BAMF!*
 
 **bamf** teleports your keyboard and mouse between two computers over the
 local network. Push the cursor past the edge of your Windows screen and it
