@@ -8,12 +8,14 @@ pub mod crypto;
 pub mod keystate;
 pub mod log;
 pub mod message;
+pub mod stream;
 
 pub use crypto::{Direction, Key, OpenError, Session};
 pub use keystate::KeyState;
-pub use message::{Button, Message};
+pub use message::{Button, Message, MIME_PNG, MIME_TEXT};
 
-/// Default UDP port the server listens on.
+/// Default port the server listens on (UDP for input, TCP for the
+/// clipboard).
 pub const DEFAULT_PORT: u16 = 24242;
 
 /// Protocol version carried in every datagram header.

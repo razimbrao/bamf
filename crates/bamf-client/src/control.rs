@@ -65,15 +65,12 @@ impl Status {
     }
 }
 
-// TODO(clipboard): used once the clipboard is wired.
-#[allow(dead_code)]
 pub fn clip_line(mime: &str, data: &[u8]) -> String {
     format!("clip {mime} {}\n", base64::encode(data))
 }
 
 /// Standard base64 (RFC 4648) with padding, as produced by
 /// `GLib.base64_encode`.
-#[allow(dead_code)]
 pub mod base64 {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 

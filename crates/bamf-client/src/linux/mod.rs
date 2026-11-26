@@ -1,6 +1,7 @@
 //! Linux glue: UDP loop plus injection through uinput virtual devices.
 
 mod control;
+mod sync;
 mod uinput;
 
 pub use control::send_command;
@@ -14,7 +15,9 @@ use bamf_proto::{
     SERVER_TIMEOUT_MS,
 };
 
-use crate::control::{Command, Status};
+use bamf_proto::stream::{EchoGuard, MAX_CLIP};
+
+use crate::control::{clip_line, Command, Status};
 use crate::state::{Action, ClientState};
 use crate::Settings;
 use uinput::*;
@@ -171,6 +174,8 @@ pub fn run(settings: Settings) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     let mut control = control::Control::bind()?;
+    let clipboard = sync::start(settings.server.clone(), settings.key.clone());
+    let mut echo = EchoGuard::default();
     let mut session = Session::new(&settings.key, Direction::ClientToServer);
     let mut state = ClientState::default();
     let mut actions = Vec::new();
@@ -205,7 +210,16 @@ pub fn run(settings: Settings) -> Result<(), String> {
                 Command::Toggle => paused = !paused,
                 Command::Status => {}
                 Command::Clip { mime, data } => {
-                    bamf_proto::debug!("clipboard {mime}, {} bytes (not wired yet)", data.len());
+                    if data.len() > MAX_CLIP {
+                        bamf_proto::warn!(
+                            "clipboard content too large to sync ({} bytes)",
+                            data.len()
+                        );
+                    } else if echo.should_send(&mime, &data) {
+                        let _ = clipboard.outgoing.send((mime, data));
+                    }
+                    // Not a state change: no status line.
+                    continue;
                 }
             }
             if paused != was {
@@ -214,6 +228,10 @@ pub fn run(settings: Settings) -> Result<(), String> {
                 last_ping = None;
             }
             force_status = true;
+        }
+        while let Ok((mime, data)) = clipboard.incoming.try_recv() {
+            echo.received(&mime, &data);
+            control.broadcast(&clip_line(&mime, &data));
         }
         let status = Status { paused, ..status };
         if status != shown || force_status {

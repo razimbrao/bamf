@@ -34,6 +34,8 @@ impl ClientState {
         match msg {
             Message::Ping { .. } => {}
             Message::Status { paused } => self.server_paused = paused,
+            // Travels on the TCP stream, never as a datagram.
+            Message::Clip { .. } => {}
             Message::Enter { x, y } => {
                 self.active = true;
                 self.last_seq = None;

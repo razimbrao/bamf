@@ -9,12 +9,20 @@ use crate::PROTOCOL_VERSION;
 const HEADER_LEN: usize = 10;
 const TAG_LEN: usize = 16;
 
-/// Who sent a datagram. Part of the nonce so both sides never reuse one.
+/// Who sent a datagram, and over which channel. Part of the nonce, so no
+/// two senders ever reuse one: both counters start at the current time, so
+/// the UDP and TCP sessions of one side would otherwise overlap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Direction {
+    /// UDP input events.
     ServerToClient = 0,
+    /// UDP pings.
     ClientToServer = 1,
+    /// TCP stream (clipboard).
+    ServerToClientStream = 2,
+    /// TCP stream (clipboard).
+    ClientToServerStream = 3,
 }
 
 /// 32-byte pre-shared key.
@@ -106,6 +114,8 @@ impl Session {
         match self.outgoing {
             Direction::ServerToClient => Direction::ClientToServer,
             Direction::ClientToServer => Direction::ServerToClient,
+            Direction::ServerToClientStream => Direction::ClientToServerStream,
+            Direction::ClientToServerStream => Direction::ServerToClientStream,
         }
     }
 
@@ -131,7 +141,7 @@ impl Session {
         header[1] = self.outgoing as u8;
         header[2..].copy_from_slice(&counter.to_le_bytes());
 
-        let mut plain = Vec::with_capacity(40);
+        let mut plain = Vec::new();
         msg.encode(&mut plain);
         let sealed = aead::seal(
             &self.key,

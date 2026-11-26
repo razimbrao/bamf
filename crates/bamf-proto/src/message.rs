@@ -78,7 +78,16 @@ pub enum Message {
         keys: KeyState,
         buttons: u8,
     },
+    /// The clipboard changed on the sender (TCP stream only, both
+    /// directions). `mime` is `text/plain;charset=utf-8` or `image/png`.
+    Clip {
+        mime: String,
+        data: Vec<u8>,
+    },
 }
+
+pub const MIME_TEXT: &str = "text/plain;charset=utf-8";
+pub const MIME_PNG: &str = "image/png";
 
 mod tag {
     pub const PING: u8 = 0x01;
@@ -91,6 +100,7 @@ mod tag {
     pub const WHEEL: u8 = 0x15;
     pub const KEY: u8 = 0x16;
     pub const STATE: u8 = 0x17;
+    pub const CLIP: u8 = 0x20;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,6 +168,13 @@ impl Message {
                 out.push(tag::STATE);
                 out.extend_from_slice(keys.as_bytes());
                 out.push(*buttons);
+            }
+            Message::Clip { mime, data } => {
+                let mime = &mime.as_bytes()[..mime.len().min(255)];
+                out.reserve(2 + mime.len() + data.len());
+                out.extend_from_slice(&[tag::CLIP, mime.len() as u8]);
+                out.extend_from_slice(mime);
+                out.extend_from_slice(data);
             }
         }
     }
@@ -251,6 +268,23 @@ impl Message {
                     buttons: body[KeyState::BYTES],
                 }
             }
+            tag::CLIP => {
+                let (&len, rest) = body.split_first().ok_or(DecodeError::BadLength {
+                    tag,
+                    len: body.len(),
+                })?;
+                if rest.len() < len as usize {
+                    return Err(DecodeError::BadLength {
+                        tag,
+                        len: body.len(),
+                    });
+                }
+                let (mime, data) = rest.split_at(len as usize);
+                Message::Clip {
+                    mime: String::from_utf8(mime.to_vec()).map_err(|_| DecodeError::BadValue)?,
+                    data: data.to_vec(),
+                }
+            }
             other => return Err(DecodeError::UnknownTag(other)),
         };
         Ok(msg)
@@ -297,6 +331,14 @@ mod tests {
                 keys,
                 buttons: 0b101,
             },
+            Message::Clip {
+                mime: MIME_TEXT.into(),
+                data: "olá".as_bytes().to_vec(),
+            },
+            Message::Clip {
+                mime: MIME_PNG.into(),
+                data: vec![],
+            },
         ] {
             roundtrip(msg);
         }
@@ -309,5 +351,11 @@ mod tests {
         assert!(Message::decode(&[0x10, 1]).is_err());
         assert_eq!(Message::decode(&[0x14, 9, 1]), Err(DecodeError::BadValue));
         assert_eq!(Message::decode(&[0x14, 0, 2]), Err(DecodeError::BadValue));
+        assert!(Message::decode(&[0x20]).is_err());
+        assert!(Message::decode(&[0x20, 5, b'a']).is_err());
+        assert_eq!(
+            Message::decode(&[0x20, 1, 0xff]),
+            Err(DecodeError::BadValue)
+        );
     }
 }

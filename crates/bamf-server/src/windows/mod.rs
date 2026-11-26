@@ -1,7 +1,9 @@
 //! Windows glue: low-level hooks, cursor handling and networking threads
 //! around the platform-independent [`Controller`].
 
+mod clipboard;
 mod ffi;
+mod sync;
 mod tray;
 
 use std::net::{SocketAddr, UdpSocket};
@@ -215,8 +217,6 @@ fn receive_loop(socket: UdpSocket) {
     }
 }
 
-fn on_clipboard_changed() {}
-
 fn heartbeat_loop() {
     loop {
         std::thread::sleep(Duration::from_millis(STATE_INTERVAL_MS));
@@ -306,9 +306,13 @@ pub fn run(settings: Settings) -> Result<(), String> {
         if mouse == 0 || keyboard == 0 {
             return Err("failed to install input hooks".into());
         }
-        tray::create(tray::Hooks {
-            clipboard_changed: on_clipboard_changed,
+        let hwnd = tray::create(tray::Hooks {
+            clipboard_changed: sync::clipboard_changed,
         })?;
+        sync::start(&settings.listen, &settings.key)?;
+        if AddClipboardFormatListener(hwnd) == 0 {
+            bamf_proto::warn!("cannot watch the clipboard; it will not be synced");
+        }
         bamf_proto::info!(
             "listening on {} — waiting for the client (Scroll Lock = back to Windows)",
             settings.listen
