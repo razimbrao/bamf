@@ -1,0 +1,9 @@
+[package]
+name = "bamf-proto"
+description = "Wire protocol and encryption shared by the bamf server and client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Intentionally dependency-free, see docs/development.md.
+[dependencies]

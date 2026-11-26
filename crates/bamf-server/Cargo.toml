@@ -1,0 +1,9 @@
+﻿[package]
+name = "bamf-server"
+description = "bamf server: captures keyboard and mouse on Windows and sends them to the client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bamf-proto = { path = "../bamf-proto" }

@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["crates/bamf-proto", "crates/bamf-server", "crates/bamf-client"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# The workspace has no third-party dependencies on purpose:
+# see docs/development.md ("Zero dependencies").
+
+[profile.release]
+lto = true
+codegen-units = 1

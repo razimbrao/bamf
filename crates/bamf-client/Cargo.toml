@@ -1,0 +1,9 @@
+﻿[package]
+name = "bamf-client"
+description = "bamf client: receives keyboard and mouse events and injects them on Linux via uinput"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bamf-proto = { path = "../bamf-proto" }
