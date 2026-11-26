@@ -6,8 +6,9 @@ uuid=bamf@razimbrao.github.io
 src="$(dirname "$0")/$uuid"
 dst="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/$uuid"
 
-mkdir -p "$dst"
+mkdir -p "$dst/icons"
 cp "$src"/*.js "$src"/metadata.json "$dst"/
+cp "$src"/icons/*.svg "$dst"/icons/
 echo "Installed to $dst"
 
 if gnome-extensions enable "$uuid" 2>/dev/null; then

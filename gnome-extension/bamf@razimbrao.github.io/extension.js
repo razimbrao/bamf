@@ -3,6 +3,7 @@
 // socket. GNOME does not let background programs use the Wayland
 // clipboard, but the shell itself can.
 
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
@@ -77,10 +78,19 @@ class ClipboardSync {
 
 const BamfIndicator = GObject.registerClass(
 class BamfIndicator extends PanelMenu.Button {
-    _init(onToggle) {
+    /**
+     * @param {Gio.File} dir the extension directory (for the icons)
+     * @param {(on: boolean) => void} onToggle
+     */
+    _init(dir, onToggle) {
         super._init(0.0, 'bamf');
+        // The same pixel-art imp as the Windows tray, generated from the
+        // tray artwork by scripts/gnome_icons.py.
+        this._looks = {};
+        for (const look of ['awake', 'dozing', 'asleep'])
+            this._looks[look] = new Gio.FileIcon({file: dir.get_child('icons').get_child(`bamf-${look}.svg`)});
         this._icon = new St.Icon({
-            icon_name: 'action-unavailable-symbolic',
+            gicon: this._looks.dozing,
             style_class: 'system-status-icon',
         });
         this.add_child(this._icon);
@@ -96,25 +106,26 @@ class BamfIndicator extends PanelMenu.Button {
     }
 
     showDown() {
-        this._icon.icon_name = 'action-unavailable-symbolic';
+        this._icon.gicon = this._looks.dozing;
         this._statusItem.label.text = 'bamf-client is not running';
         this._switch.setSensitive(false);
     }
 
     showStatus(s) {
-        let icon, text;
+        let look, text;
         // The pause state is shared with the server: flipping it here or
-        // on Windows changes it on both machines.
+        // on Windows changes it on both machines. Same faces as the tray:
+        // awake = ready, dozing = waiting, asleep = paused.
         if (!s.connected) {
-            [icon, text] = ['network-offline-symbolic', 'Waiting for the server'];
+            [look, text] = ['dozing', 'Waiting for the server'];
         } else if (s.paused) {
-            [icon, text] = ['media-playback-pause-symbolic', 'Paused on both machines'];
+            [look, text] = ['asleep', 'Paused on both machines'];
         } else if (s.remote) {
-            [icon, text] = ['input-keyboard-symbolic', 'Keyboard and mouse are here'];
+            [look, text] = ['awake', 'Keyboard and mouse are here'];
         } else {
-            [icon, text] = ['input-mouse-symbolic', 'Connected'];
+            [look, text] = ['awake', 'Connected'];
         }
-        this._icon.icon_name = icon;
+        this._icon.gicon = this._looks[look];
         this._statusItem.label.text = text;
         this._switch.setSensitive(true);
         // setToggleState does not emit `toggled`, so this cannot loop.
@@ -124,7 +135,7 @@ class BamfIndicator extends PanelMenu.Button {
 
 export default class BamfExtension extends Extension {
     enable() {
-        this._indicator = new BamfIndicator(on => this._link.send(on ? 'resume' : 'pause'));
+        this._indicator = new BamfIndicator(this.dir, on => this._link.send(on ? 'resume' : 'pause'));
         Main.panel.addToStatusArea(this.uuid, this._indicator);
         this._link = new Link(
             line => this._onLine(line),
