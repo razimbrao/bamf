@@ -63,6 +63,14 @@ pub enum MouseEvent {
 /// computed from the old position; they are dropped.
 const MAX_SANE_DELTA: i32 = 500;
 
+fn rel_message(dx: i32, dy: i32) -> Message {
+    let clamp = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+    Message::MouseRel {
+        dx: clamp(dx),
+        dy: clamp(dy),
+    }
+}
+
 pub struct Controller<P: Platform> {
     pub platform: P,
     geometry: Geometry,
@@ -174,15 +182,22 @@ impl<P: Platform> Controller<P> {
                     return Verdict::Block;
                 }
                 match self.geometry.apply(&mut pos, dx, dy) {
-                    Motion::Remote { abs, rel } => {
+                    Motion::Remote { abs, rel, push } => {
                         self.remote = Some(pos);
-                        self.outbox.push(match self.mode {
-                            PointerMode::Absolute => Message::MouseAbs { x: abs.0, y: abs.1 },
-                            PointerMode::Relative => Message::MouseRel {
-                                dx: rel.0.clamp(i16::MIN as i32, i16::MAX as i32) as i16,
-                                dy: rel.1.clamp(i16::MIN as i32, i16::MAX as i32) as i16,
-                            },
-                        });
+                        match self.mode {
+                            PointerMode::Absolute => {
+                                self.outbox.push(Message::MouseAbs { x: abs.0, y: abs.1 });
+                                // An absolute position cannot express pressing
+                                // against an edge; send that part as a delta
+                                // so pointer barriers (docks, hot corners) work.
+                                if push != (0, 0) {
+                                    self.outbox.push(rel_message(push.0, push.1));
+                                }
+                            }
+                            PointerMode::Relative => self
+                                .outbox
+                                .push(rel_message(rel.0 + push.0, rel.1 + push.1)),
+                        }
                     }
                     Motion::Leave { local } => self.leave(local),
                 }
@@ -276,6 +291,7 @@ impl<P: Platform> Controller<P> {
 mod tests {
     use super::*;
     use crate::geometry::{Rect, Side};
+    use bamf_proto::ABS_MAX;
 
     #[derive(Default)]
     struct FakePlatform {
@@ -372,6 +388,40 @@ mod tests {
         assert!(!c.platform.hidden);
         assert_eq!(c.outbox, vec![Message::Leave]);
         assert_eq!(c.platform.cursor.0, 1918);
+    }
+
+    #[test]
+    fn edge_pressure_is_sent_as_relative_motion() {
+        let (mut c, now) = controller(PointerMode::Absolute);
+        enter(&mut c, now);
+        // Inside the screen: absolute position only.
+        c.on_mouse(mv(PARK.0 + 5, PARK.1), now);
+        assert!(matches!(c.outbox[..], [Message::MouseAbs { .. }]));
+        c.outbox.clear();
+
+        // Down to the bottom edge and beyond: the overflow becomes a delta.
+        c.on_mouse(mv(PARK.0, PARK.1 + 400), now);
+        c.outbox.clear();
+        c.on_mouse(mv(PARK.0, PARK.1 + 400), now);
+        c.on_mouse(mv(PARK.0, PARK.1 + 400), now);
+        // 940 -> 1079 (clamped, 261 lost), then fully at the edge (400 lost).
+        assert!(matches!(
+            c.outbox[..],
+            [
+                Message::MouseAbs { y: ABS_MAX, .. },
+                Message::MouseRel { dx: 0, dy: 261 },
+                Message::MouseAbs { y: ABS_MAX, .. },
+                Message::MouseRel { dx: 0, dy: 400 },
+            ]
+        ));
+
+        // Relative mode sends the raw delta even at the edge.
+        let (mut c, now) = controller(PointerMode::Relative);
+        enter(&mut c, now);
+        c.on_mouse(mv(PARK.0, PARK.1 + 400), now);
+        c.on_mouse(mv(PARK.0, PARK.1 + 400), now);
+        c.on_mouse(mv(PARK.0, PARK.1 + 400), now);
+        assert_eq!(c.outbox[2], Message::MouseRel { dx: 0, dy: 400 });
     }
 
     #[test]

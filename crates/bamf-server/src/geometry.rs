@@ -57,7 +57,14 @@ pub struct Geometry {
 pub enum Motion {
     /// Still on the remote screen. `abs` is normalised to 0..=ABS_MAX,
     /// `rel` is the movement actually applied (after clamping), in pixels.
-    Remote { abs: (u16, u16), rel: (i32, i32) },
+    /// `push` is the part of the movement lost to clamping, i.e. the cursor
+    /// pressing against a remote edge. Compositors use that pressure for
+    /// pointer barriers (e.g. revealing a dock), so it must still be sent.
+    Remote {
+        abs: (u16, u16),
+        rel: (i32, i32),
+        push: (i32, i32),
+    },
     /// Crossed back; place the local cursor here.
     Leave { local: (i32, i32) },
 }
@@ -130,6 +137,7 @@ impl Geometry {
         Motion::Remote {
             abs: self.normalise(*pos),
             rel: ((pos.0 - old.0) as i32, (pos.1 - old.1) as i32),
+            push: ((nx - pos.0) as i32, (ny - pos.1) as i32),
         }
     }
 
@@ -196,11 +204,21 @@ mod tests {
             g.apply(&mut pos, 10, -5),
             Motion::Remote {
                 abs: g.normalise((10.0, 0.0)),
-                rel: (10, 0)
+                rel: (10, 0),
+                push: (0, -5)
             }
         );
         g.apply(&mut pos, 100_000, 100_000);
         assert_eq!(pos, (1919.0, 1079.0));
+        // Pressing against the bottom edge keeps reporting the push.
+        assert_eq!(
+            g.apply(&mut pos, 0, 7),
+            Motion::Remote {
+                abs: (ABS_MAX, ABS_MAX),
+                rel: (0, 0),
+                push: (0, 7)
+            }
+        );
         assert_eq!(g.normalise(pos), (ABS_MAX, ABS_MAX));
     }
 
@@ -212,7 +230,8 @@ mod tests {
             g.apply(&mut pos, -2, 0),
             Motion::Remote {
                 abs: g.normalise((1.0, 1079.0)),
-                rel: (-2, 0)
+                rel: (-2, 0),
+                push: (0, 0)
             }
         );
         assert_eq!(
