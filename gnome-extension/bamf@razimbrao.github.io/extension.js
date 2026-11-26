@@ -3,6 +3,7 @@
 // socket. GNOME does not let background programs use the Wayland
 // clipboard, but the shell itself can.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
@@ -84,6 +85,9 @@ class BamfIndicator extends PanelMenu.Button {
      */
     _init(dir, onToggle) {
         super._init(0.0, 'bamf');
+        this._onToggle = onToggle;
+        this._up = false;
+        this._paused = false;
         // The same pixel-art imp as the Windows tray, generated from the
         // tray artwork by scripts/gnome_icons.py.
         this._looks = {};
@@ -105,7 +109,22 @@ class BamfIndicator extends PanelMenu.Button {
         this.showDown();
     }
 
+    /**
+     * Left click pauses or resumes right away; right click (or any click
+     * while the client is not running) opens the menu.
+     */
+    vfunc_event(event) {
+        if (this._up &&
+            event.type() === Clutter.EventType.BUTTON_PRESS &&
+            event.get_button() === Clutter.BUTTON_PRIMARY) {
+            this._onToggle(this._paused);
+            return Clutter.EVENT_STOP;
+        }
+        return super.vfunc_event(event);
+    }
+
     showDown() {
+        this._up = false;
         this._icon.gicon = this._looks.dozing;
         this._statusItem.label.text = 'bamf-client is not running';
         this._switch.setSensitive(false);
@@ -126,6 +145,8 @@ class BamfIndicator extends PanelMenu.Button {
             [look, text] = ['awake', 'Connected'];
         }
         this._icon.gicon = this._looks[look];
+        this._up = true;
+        this._paused = s.paused;
         this._statusItem.label.text = text;
         this._switch.setSensitive(true);
         // setToggleState does not emit `toggled`, so this cannot loop.
