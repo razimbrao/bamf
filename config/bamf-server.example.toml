@@ -14,6 +14,13 @@ remote_side = "right"
 remote_width = 1920
 remote_height = 1080
 
+# Optional: line the screens up pixel to pixel, like two physical monitors.
+# How many local pixels below the top of this desktop the client screen's top
+# edge sits (to the right of the left edge, for top/bottom). Negative = above.
+# The cursor only crosses where the edges overlap. Leave it out to stretch the
+# client edge along the whole local edge.
+# remote_offset = 300
+
 # absolute: the server owns the remote cursor position (default).
 # relative: classic mouse deltas; fallback if absolute positioning misbehaves.
 pointer_mode = "absolute"

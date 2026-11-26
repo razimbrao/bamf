@@ -324,6 +324,7 @@ mod tests {
             remote_width: 1920,
             remote_height: 1080,
             side: Side::Right,
+            offset: None,
         };
         let mut c = Controller::new(FakePlatform::default(), geometry, mode, PARK);
         let now = Instant::now();

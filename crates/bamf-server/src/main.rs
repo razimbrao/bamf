@@ -39,6 +39,7 @@ pub struct Settings {
     pub remote_width: u32,
     pub remote_height: u32,
     pub mode: PointerMode,
+    pub offset: Option<i32>,
 }
 
 impl Settings {
@@ -53,6 +54,7 @@ impl Settings {
             remote_width: c.parse_or("remote_width", 1920)?,
             remote_height: c.parse_or("remote_height", 1080)?,
             mode: c.parse_or("pointer_mode", PointerMode::Absolute)?,
+            offset: c.parse_opt("remote_offset")?,
         };
         if settings.remote_width < 2 || settings.remote_height < 2 {
             return Err("remote_width and remote_height must be at least 2".into());

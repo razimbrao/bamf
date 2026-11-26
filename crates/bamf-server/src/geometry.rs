@@ -25,6 +25,13 @@ impl std::str::FromStr for Side {
     }
 }
 
+impl Side {
+    /// True when the shared edge is vertical (screens side by side).
+    fn vertical(self) -> bool {
+        matches!(self, Side::Left | Side::Right)
+    }
+}
+
 /// Rectangle in local screen coordinates. `right` and `bottom` are exclusive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rect {
@@ -50,6 +57,17 @@ pub struct Geometry {
     pub remote_width: u32,
     pub remote_height: u32,
     pub side: Side,
+    /// How the two edges line up.
+    ///
+    /// `None`: the remote edge is stretched along the whole local edge, so
+    /// the top of one always meets the top of the other.
+    ///
+    /// `Some(offset)`: pixel to pixel, like two physical monitors. The
+    /// remote screen starts `offset` local pixels below the local top (or to
+    /// the right of the local left, for `top`/`bottom`). Negative values
+    /// mean it starts above (or to the left). The cursor only crosses where
+    /// the edges overlap; elsewhere the edge is a wall.
+    pub offset: Option<i32>,
 }
 
 /// Result of moving the virtual cursor on the remote screen.
@@ -79,30 +97,86 @@ fn fraction(pos: f64, len: f64) -> f64 {
 }
 
 impl Geometry {
-    /// True when the local cursor touches the edge that faces the remote
+    /// Length of the shared edge on the local screen, in local pixels.
+    fn local_len(&self) -> i32 {
+        if self.side.vertical() {
+            self.local.height()
+        } else {
+            self.local.width()
+        }
+    }
+
+    /// Length of the shared edge on the remote screen, in remote pixels.
+    fn remote_len(&self) -> f64 {
+        if self.side.vertical() {
+            self.remote_height as f64
+        } else {
+            self.remote_width as f64
+        }
+    }
+
+    /// Position along the shared edge, relative to the start of the local
     /// screen.
+    fn local_along(&self, x: i32, y: i32) -> i32 {
+        if self.side.vertical() {
+            y - self.local.top
+        } else {
+            x - self.local.left
+        }
+    }
+
+    /// Local position along the edge → remote position, if the edges
+    /// overlap there.
+    fn remote_along_of(&self, along: i32) -> Option<f64> {
+        let remote_len = self.remote_len();
+        match self.offset {
+            None => Some(fraction(along as f64, self.local_len() as f64) * (remote_len - 1.0)),
+            Some(offset) => {
+                let r = (along - offset) as f64;
+                (0.0..remote_len).contains(&r).then_some(r)
+            }
+        }
+    }
+
+    /// Remote position along the edge → local position, if the edges
+    /// overlap there.
+    fn local_along_of(&self, along: f64) -> Option<i32> {
+        let local_len = self.local_len();
+        match self.offset {
+            None => {
+                let f = fraction(along, self.remote_len());
+                Some((f * (local_len - 1) as f64).round() as i32)
+            }
+            Some(offset) => {
+                let l = along.round() as i32 + offset;
+                (0..local_len).contains(&l).then_some(l)
+            }
+        }
+    }
+
+    /// True when the local cursor touches the edge that faces the remote
+    /// screen, at a point where the two screens meet.
     pub fn at_edge(&self, x: i32, y: i32) -> bool {
         let l = &self.local;
-        match self.side {
+        let on_edge = match self.side {
             Side::Right => x >= l.right - 1,
             Side::Left => x <= l.left,
             Side::Bottom => y >= l.bottom - 1,
             Side::Top => y <= l.top,
-        }
+        };
+        on_edge && self.remote_along_of(self.local_along(x, y)).is_some()
     }
 
     /// Virtual cursor position (remote pixels) right after crossing at local
     /// position `(x, y)`.
     pub fn entry_point(&self, x: i32, y: i32) -> (f64, f64) {
-        let l = &self.local;
         let (rw, rh) = (self.remote_width as f64, self.remote_height as f64);
-        let fx = fraction((x - l.left) as f64, l.width() as f64);
-        let fy = fraction((y - l.top) as f64, l.height() as f64);
+        let a = self.remote_along_of(self.local_along(x, y)).unwrap_or(0.0);
         match self.side {
-            Side::Right => (0.0, fy * (rh - 1.0)),
-            Side::Left => (rw - 1.0, fy * (rh - 1.0)),
-            Side::Bottom => (fx * (rw - 1.0), 0.0),
-            Side::Top => (fx * (rw - 1.0), rh - 1.0),
+            Side::Right => (0.0, a),
+            Side::Left => (rw - 1.0, a),
+            Side::Bottom => (a, 0.0),
+            Side::Top => (a, rh - 1.0),
         }
     }
 
@@ -126,9 +200,17 @@ impl Geometry {
             Side::Top => ny > rh - 1.0,
         };
         if leaving {
-            return Motion::Leave {
-                local: self.exit_point((nx, ny)),
+            let along = if self.side.vertical() {
+                ny.clamp(0.0, rh - 1.0)
+            } else {
+                nx.clamp(0.0, rw - 1.0)
             };
+            // Where the local screen does not continue, the edge is a wall.
+            if let Some(a) = self.local_along_of(along) {
+                return Motion::Leave {
+                    local: self.exit_point(a),
+                };
+            }
         }
 
         let old = *pos;
@@ -141,19 +223,16 @@ impl Geometry {
         }
     }
 
-    /// Local cursor position when coming back from remote position `pos`.
-    /// It lands one pixel inside the edge so it does not bounce right back.
-    fn exit_point(&self, pos: (f64, f64)) -> (i32, i32) {
+    /// Local cursor position when coming back at local position `along` the
+    /// edge. It lands one pixel inside the edge so it does not bounce right
+    /// back.
+    fn exit_point(&self, along: i32) -> (i32, i32) {
         let l = &self.local;
-        let fx = fraction(pos.0, self.remote_width as f64);
-        let fy = fraction(pos.1, self.remote_height as f64);
-        let along_x = l.left + (fx * (l.width() - 1) as f64).round() as i32;
-        let along_y = l.top + (fy * (l.height() - 1) as f64).round() as i32;
         match self.side {
-            Side::Right => (l.right - 2, along_y),
-            Side::Left => (l.left + 1, along_y),
-            Side::Bottom => (along_x, l.bottom - 2),
-            Side::Top => (along_x, l.top + 1),
+            Side::Right => (l.right - 2, l.top + along),
+            Side::Left => (l.left + 1, l.top + along),
+            Side::Bottom => (l.left + along, l.bottom - 2),
+            Side::Top => (l.left + along, l.top + 1),
         }
     }
 }
@@ -173,6 +252,14 @@ mod tests {
             remote_width: 1920,
             remote_height: 1080,
             side,
+            offset: None,
+        }
+    }
+
+    fn geo_offset(offset: i32) -> Geometry {
+        Geometry {
+            offset: Some(offset),
+            ..geo(Side::Right)
         }
     }
 
@@ -210,6 +297,7 @@ mod tests {
         );
         g.apply(&mut pos, 100_000, 100_000);
         assert_eq!(pos, (1919.0, 1079.0));
+        assert_eq!(g.normalise(pos), (ABS_MAX, ABS_MAX));
         // Pressing against the bottom edge keeps reporting the push.
         assert_eq!(
             g.apply(&mut pos, 0, 7),
@@ -219,7 +307,6 @@ mod tests {
                 push: (0, 7)
             }
         );
-        assert_eq!(g.normalise(pos), (ABS_MAX, ABS_MAX));
     }
 
     #[test]
@@ -244,6 +331,60 @@ mod tests {
         let g = geo(Side::Top);
         let mut pos = (0.0, 1079.0);
         assert_eq!(g.apply(&mut pos, 0, 1), Motion::Leave { local: (0, 1) });
+    }
+
+    #[test]
+    fn offset_crosses_only_where_edges_overlap() {
+        // Remote 1080 px tall, starting 300 px below the local top:
+        // local rows 300..=1379 touch it.
+        let g = geo_offset(300);
+        assert!(!g.at_edge(2559, 299));
+        assert!(g.at_edge(2559, 300));
+        assert!(g.at_edge(2559, 1379));
+        assert!(!g.at_edge(2559, 1380));
+        assert_eq!(g.entry_point(2559, 300), (0.0, 0.0));
+        assert_eq!(g.entry_point(2559, 800), (0.0, 500.0));
+    }
+
+    #[test]
+    fn offset_maps_back_pixel_to_pixel() {
+        let g = geo_offset(300);
+        let mut pos = (2.0, 500.0);
+        assert_eq!(
+            g.apply(&mut pos, -5, 0),
+            Motion::Leave { local: (2558, 800) }
+        );
+    }
+
+    #[test]
+    fn offset_edge_is_a_wall_where_local_screen_ends() {
+        // Remote starts 600 px down, so its rows 840.. have no local
+        // neighbour (600 + 840 = 1440 is past the local bottom).
+        let g = geo_offset(600);
+        let mut pos = (0.0, 900.0);
+        assert_eq!(
+            g.apply(&mut pos, -4, 0),
+            Motion::Remote {
+                abs: g.normalise((0.0, 900.0)),
+                rel: (0, 0),
+                push: (-4, 0)
+            }
+        );
+        let mut pos = (0.0, 839.0);
+        assert_eq!(
+            g.apply(&mut pos, -4, 0),
+            Motion::Leave {
+                local: (2558, 1439)
+            }
+        );
+    }
+
+    #[test]
+    fn negative_offset_starts_above() {
+        let g = geo_offset(-200);
+        assert!(g.at_edge(2559, 0));
+        assert_eq!(g.entry_point(2559, 0), (0.0, 200.0));
+        assert!(!g.at_edge(2559, 880));
     }
 
     #[test]

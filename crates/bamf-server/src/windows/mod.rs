@@ -257,9 +257,10 @@ pub fn run(settings: Settings) -> Result<(), String> {
         remote_width: settings.remote_width,
         remote_height: settings.remote_height,
         side: settings.side,
+        offset: settings.offset,
     };
     bamf_proto::info!(
-        "desktop {}x{} at ({}, {}); remote {}x{} on the {:?}; pointer {:?}",
+        "desktop {}x{} at ({}, {}); remote {}x{} on the {:?} ({}); pointer {:?}",
         local.width(),
         local.height(),
         local.left,
@@ -267,6 +268,10 @@ pub fn run(settings: Settings) -> Result<(), String> {
         settings.remote_width,
         settings.remote_height,
         settings.side,
+        match settings.offset {
+            Some(o) => format!("offset {o} px"),
+            None => "stretched".to_string(),
+        },
         settings.mode
     );
 

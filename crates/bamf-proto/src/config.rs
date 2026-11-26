@@ -58,6 +58,16 @@ impl Config {
                 .map_err(|_| format!("invalid value for `{key}`: {v}")),
         }
     }
+
+    /// Like [`Config::parse_or`], but `None` when the key is absent.
+    pub fn parse_opt<T: FromStr>(&self, key: &str) -> Result<Option<T>, String> {
+        self.str(key)
+            .map(|v| {
+                v.parse()
+                    .map_err(|_| format!("invalid value for `{key}`: {v}"))
+            })
+            .transpose()
+    }
 }
 
 fn strip_comment(line: &str) -> &str {
@@ -88,6 +98,8 @@ mod tests {
         assert_eq!(c.str("name"), Some("a # b"));
         assert!(c.required("missing").is_err());
         assert!(c.parse_or::<u32>("listen", 0).is_err());
+        assert_eq!(c.parse_opt::<u32>("width").unwrap(), Some(1920));
+        assert_eq!(c.parse_opt::<i32>("height").unwrap(), None);
     }
 
     #[test]
