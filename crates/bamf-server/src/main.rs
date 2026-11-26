@@ -8,6 +8,8 @@ mod controller;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod geometry;
 #[cfg_attr(not(windows), allow(dead_code))]
+mod icon;
+#[cfg_attr(not(windows), allow(dead_code))]
 mod image;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod keymap;

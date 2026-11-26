@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use super::ffi::*;
 use super::server;
+use crate::icon::{self, Look};
 
 /// Sent by the shell when the icon is clicked.
 const WM_TRAY: u32 = WM_APP + 1;
@@ -300,36 +301,26 @@ struct Icons {
 fn icons() -> &'static Icons {
     static ICONS: std::sync::OnceLock<Icons> = std::sync::OnceLock::new();
     ICONS.get_or_init(|| Icons {
-        // Purple like the docs' Windows side; amber while waiting.
-        active: make_icon([0xB7, 0x4A, 0x53], false),
-        waiting: make_icon([0x17, 0x75, 0xBA], false),
-        paused: make_icon([0x80, 0x87, 0x88], true),
+        active: make_icon(Look::Awake),
+        waiting: make_icon(Look::Dozing),
+        paused: make_icon(Look::Asleep),
     })
 }
 
-/// Draws a 32x32 disc in `bgr`, with a white pause sign if `bars`.
-fn make_icon(bgr: [u8; 3], bars: bool) -> HICON {
-    const N: usize = 32;
-    let mut xor = vec![0u8; N * N * 4];
-    let and = [0u8; N * N / 8];
-    let c = (N as f64 - 1.0) / 2.0;
-    for y in 0..N {
-        for x in 0..N {
-            let d = ((x as f64 - c).powi(2) + (y as f64 - c).powi(2)).sqrt();
-            // Anti-aliased edge over one pixel.
-            let alpha = (14.5 - d).clamp(0.0, 1.0);
-            if alpha == 0.0 {
-                continue;
-            }
-            let bar =
-                bars && (9..=22).contains(&y) && ((10..=13).contains(&x) || (18..=21).contains(&x));
-            let [b, g, r] = if bar { [0xff, 0xff, 0xff] } else { bgr };
-            let a = (alpha * 255.0) as u8;
-            // Premultiplied alpha.
-            let pm = |v: u8| (v as f64 * alpha) as u8;
-            let i = (y * N + x) * 4;
-            xor[i..i + 4].copy_from_slice(&[pm(b), pm(g), pm(r), a]);
-        }
+/// Draws the pixel-art imp at the shell's small-icon size (16 px at 100%
+/// scaling), so the shell does not have to resample it.
+fn make_icon(look: Look) -> HICON {
+    let size = match unsafe { GetSystemMetrics(SM_CXSMICON) } {
+        n if n > 0 => n as usize,
+        _ => 16,
+    };
+    // The art is fully opaque or fully transparent, so straight and
+    // premultiplied alpha are the same; only RGBA -> BGRA is needed.
+    let mut bgra = icon::render(look, size);
+    for px in bgra.as_chunks_mut::<4>().0 {
+        px.swap(0, 2);
     }
-    unsafe { CreateIcon(0, N as i32, N as i32, 1, 32, and.as_ptr(), xor.as_ptr()) }
+    // AND mask rows are padded to 16 bits; all zero lets the alpha decide.
+    let and = vec![0u8; size.div_ceil(16) * 2 * size];
+    unsafe { CreateIcon(0, size as i32, size as i32, 1, 32, and.as_ptr(), bgra.as_ptr()) }
 }
