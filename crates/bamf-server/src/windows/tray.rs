@@ -263,9 +263,15 @@ fn show_menu(hwnd: HWND) {
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_TRAY => {
-            let event = lparam as u32;
-            if event == WM_RBUTTONUP || event == WM_LBUTTONUP {
-                show_menu(hwnd);
+            // Left click pauses or resumes right away; right click opens the
+            // menu (status and Quit).
+            match lparam as u32 {
+                WM_LBUTTONUP => {
+                    toggle_pause();
+                    refresh(hwnd);
+                }
+                WM_RBUTTONUP => show_menu(hwnd),
+                _ => {}
             }
             0
         }
@@ -322,5 +328,15 @@ fn make_icon(look: Look) -> HICON {
     }
     // AND mask rows are padded to 16 bits; all zero lets the alpha decide.
     let and = vec![0u8; size.div_ceil(16) * 2 * size];
-    unsafe { CreateIcon(0, size as i32, size as i32, 1, 32, and.as_ptr(), bgra.as_ptr()) }
+    unsafe {
+        CreateIcon(
+            0,
+            size as i32,
+            size as i32,
+            1,
+            32,
+            and.as_ptr(),
+            bgra.as_ptr(),
+        )
+    }
 }
