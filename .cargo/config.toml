@@ -1,0 +1,5 @@
+# Lets `cargo test --target wasm32-wasip1` run tests through Node.js.
+# Tests run with the crate directory (crates/<name>) as working directory,
+# hence the relative path.
+[target.wasm32-wasip1]
+runner = ["node", "--no-warnings", "../../scripts/wasi-runner.mjs"]
