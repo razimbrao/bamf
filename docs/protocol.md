@@ -12,7 +12,7 @@ All integers are little-endian.
 ```
 +---------+-----------+-------------+----------------------------------+
 | version | direction | counter     | ciphertext + 16-byte Poly1305 tag|
-| u8 (=2) | u8        | u64         |                                  |
+| u8 (=3) | u8        | u64         |                                  |
 +---------+-----------+-------------+----------------------------------+
  \______________ header (10 bytes, used as AAD) ___/
 ```
@@ -36,8 +36,8 @@ The plaintext is one message: a `u8` tag followed by its fields.
 
 | Tag | Name | Direction | Fields |
 |---|---|---|---|
-| `0x01` | `Ping` | C → S | `paused: u8` (the user paused bamf on the client) |
-| `0x02` | `Status` | S → C | `paused: u8` (the user paused bamf on the server); reply to every `Ping` |
+| `0x01` | `Ping` | C → S | `pause: u8`: `0` no change, `1` pause, `2` resume (the user flipped the switch on the client; repeated until `Status` shows it) |
+| `0x02` | `Status` | S → C | `paused: u8`, the shared pause state; reply to every `Ping` |
 | `0x10` | `Enter` | S → C | `x: u16`, `y: u16` (absolute position, 0–65535) |
 | `0x11` | `Leave` | S → C | — |
 | `0x12` | `MouseAbs` | S → C | `x: u16`, `y: u16` |
@@ -47,9 +47,11 @@ The plaintext is one message: a `u8` tag followed by its fields.
 | `0x16` | `Key` | S → C | `seq: u32`, `code: u16` (evdev), `down: u8` |
 | `0x17` | `State` | S → C | `keys: [u8; 32]` (bitmap of evdev codes 0–255), `buttons: u8` |
 
-Version 2 added the pause flags. The cursor only crosses while neither side
-is paused; pausing either side while the cursor is on the client sends it
-back to the server.
+The pause state is shared and lives on the server: its tray icon changes
+it directly, the client asks through `Ping`, and every `Status` reports it,
+so both machines always show the same state. The cursor only crosses while
+it is off; pausing while the cursor is on the client sends it back.
+Version 3 replaced version 2's independent per-side flags with this.
 
 ## Clipboard stream (TCP)
 

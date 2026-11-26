@@ -35,7 +35,6 @@ static HOOKS: Mutex<Option<Hooks>> = Mutex::new(None);
 pub enum Client {
     Absent,
     Connected,
-    Paused,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,7 +56,6 @@ impl Status {
         let client = match self.client {
             Client::Absent => "client not connected",
             Client::Connected => "client connected",
-            Client::Paused => "paused on the client",
         };
         format!("bamf: {state}, {client}")
     }
@@ -66,7 +64,6 @@ impl Status {
         match self.client {
             Client::Absent => "Client: not connected",
             Client::Connected => "Client: connected",
-            Client::Paused => "Client: paused there",
         }
     }
 }
@@ -74,12 +71,10 @@ impl Status {
 pub fn current_status() -> Status {
     let s = server();
     let c = &s.controller;
-    let client = if !c.client_alive(Instant::now()) {
-        Client::Absent
-    } else if c.is_client_paused() {
-        Client::Paused
-    } else {
+    let client = if c.client_alive(Instant::now()) {
         Client::Connected
+    } else {
+        Client::Absent
     };
     Status {
         paused: c.is_paused(),
@@ -199,7 +194,7 @@ fn refresh(hwnd: HWND) {
     let icons = icons();
     let mut data = icon_data(hwnd);
     data.uFlags = NIF_ICON | NIF_TIP;
-    data.hIcon = if status.paused || status.client == Client::Paused {
+    data.hIcon = if status.paused {
         icons.paused
     } else if status.client == Client::Absent {
         icons.waiting

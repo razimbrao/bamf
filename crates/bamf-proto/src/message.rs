@@ -34,13 +34,14 @@ impl Button {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
-    /// Client liveness signal, every 500 ms. `paused`: the user paused bamf
-    /// on the client, so the server must not send input there.
+    /// Client liveness signal, every 500 ms. `pause`: the user switched
+    /// pause on (`Some(true)`) or off (`Some(false)`) on the client; repeated
+    /// until a `Status` shows it applied.
     Ping {
-        paused: bool,
+        pause: Option<bool>,
     },
-    /// Server reply to every ping. `paused`: the user paused bamf on the
-    /// server.
+    /// Server reply to every ping: the shared pause state, which either
+    /// side can change.
     Status {
         paused: bool,
     },
@@ -129,7 +130,14 @@ impl std::error::Error for DecodeError {}
 impl Message {
     pub fn encode(&self, out: &mut Vec<u8>) {
         match self {
-            Message::Ping { paused } => out.extend_from_slice(&[tag::PING, *paused as u8]),
+            Message::Ping { pause } => {
+                let request = match pause {
+                    None => 0,
+                    Some(true) => 1,
+                    Some(false) => 2,
+                };
+                out.extend_from_slice(&[tag::PING, request]);
+            }
             Message::Status { paused } => out.extend_from_slice(&[tag::STATUS, *paused as u8]),
             Message::Enter { x, y } => {
                 out.push(tag::ENTER);
@@ -203,7 +211,12 @@ impl Message {
             tag::PING => {
                 expect(1)?;
                 Message::Ping {
-                    paused: bool_at(0)?,
+                    pause: match body[0] {
+                        0 => None,
+                        1 => Some(true),
+                        2 => Some(false),
+                        _ => return Err(DecodeError::BadValue),
+                    },
                 }
             }
             tag::STATUS => {
@@ -307,8 +320,9 @@ mod tests {
         keys.set(30, true);
         keys.set(255, true);
         for msg in [
-            Message::Ping { paused: false },
-            Message::Ping { paused: true },
+            Message::Ping { pause: None },
+            Message::Ping { pause: Some(true) },
+            Message::Ping { pause: Some(false) },
             Message::Status { paused: true },
             Message::Enter { x: 0, y: 65535 },
             Message::Leave,

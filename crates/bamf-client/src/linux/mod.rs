@@ -185,7 +185,9 @@ pub fn run(settings: Settings) -> Result<(), String> {
     let ping_every = Duration::from_millis(PING_INTERVAL_MS);
     let server_timeout = Duration::from_millis(SERVER_TIMEOUT_MS);
     let link_timeout = Duration::from_millis(CLIENT_TIMEOUT_MS);
-    let mut paused = false;
+    // The pause state is shared and lives on the server. A switch flipped
+    // here is `pending` until the server's Status confirms it.
+    let mut pending: Option<bool> = None;
     let mut shown = Status::default();
 
     bamf_proto::info!(
@@ -195,20 +197,20 @@ pub fn run(settings: Settings) -> Result<(), String> {
     );
 
     loop {
+        let paused = pending.unwrap_or(state.is_server_paused());
         let status = Status {
             connected: last_rx.is_some_and(|t| t.elapsed() < link_timeout),
             remote: state.is_active(),
             paused,
-            server_paused: state.is_server_paused(),
         };
         let mut force_status = false;
         for cmd in control.poll(&status.line()) {
-            let was = paused;
-            match cmd {
-                Command::Pause => paused = true,
-                Command::Resume => paused = false,
-                Command::Toggle => paused = !paused,
-                Command::Status => {}
+            let current = pending.unwrap_or(state.is_server_paused());
+            let wanted = match cmd {
+                Command::Pause => Some(true),
+                Command::Resume => Some(false),
+                Command::Toggle => Some(!current),
+                Command::Status => None,
                 Command::Clip { mime, data } => {
                     if data.len() > MAX_CLIP {
                         bamf_proto::warn!(
@@ -221,9 +223,12 @@ pub fn run(settings: Settings) -> Result<(), String> {
                     // Not a state change: no status line.
                     continue;
                 }
-            }
-            if paused != was {
-                bamf_proto::info!("{}", if paused { "paused" } else { "resumed" });
+            };
+            if let Some(wanted) = wanted {
+                if wanted != current {
+                    bamf_proto::info!("{}", if wanted { "pausing" } else { "resuming" });
+                }
+                pending = Some(wanted);
                 // Tell the server right away instead of at the next ping.
                 last_ping = None;
             }
@@ -233,7 +238,10 @@ pub fn run(settings: Settings) -> Result<(), String> {
             echo.received(&mime, &data);
             control.broadcast(&clip_line(&mime, &data));
         }
-        let status = Status { paused, ..status };
+        let status = Status {
+            paused: pending.unwrap_or(state.is_server_paused()),
+            ..status
+        };
         if status != shown || force_status {
             control.broadcast(&status.line());
             shown = status;
@@ -241,7 +249,7 @@ pub fn run(settings: Settings) -> Result<(), String> {
 
         if last_ping.is_none_or(|t| t.elapsed() >= ping_every) {
             // Errors (e.g. server not up yet) are expected; keep trying.
-            let _ = socket.send(&session.seal(&Message::Ping { paused }));
+            let _ = socket.send(&session.seal(&Message::Ping { pause: pending }));
             last_ping = Some(Instant::now());
         }
 
@@ -253,7 +261,24 @@ pub fn run(settings: Settings) -> Result<(), String> {
                     }
                     last_rx = Some(Instant::now());
                     let was_active = state.is_active();
+                    let was_paused = state.is_server_paused();
+                    let is_status = matches!(msg, Message::Status { .. });
                     state.handle(msg, &mut actions);
+                    if is_status {
+                        if pending == Some(state.is_server_paused()) {
+                            pending = None; // the server applied it
+                        }
+                        if state.is_server_paused() != was_paused && pending.is_none() {
+                            bamf_proto::info!(
+                                "{}",
+                                if state.is_server_paused() {
+                                    "paused"
+                                } else {
+                                    "resumed"
+                                }
+                            );
+                        }
+                    }
                     if state.is_active() != was_active {
                         bamf_proto::info!(
                             "{}",

@@ -200,12 +200,12 @@ fn receive_loop(socket: UdpSocket) {
         };
         let mut s = server();
         match s.session.open(&buf[..len]) {
-            Ok(Message::Ping { paused }) => {
+            Ok(Message::Ping { pause }) => {
                 if s.client != Some(addr) {
                     bamf_proto::info!("client connected from {addr}");
                     s.client = Some(addr);
                 }
-                let reply = s.controller.on_ping(Instant::now(), paused);
+                let reply = s.controller.on_ping(Instant::now(), pause);
                 s.controller.outbox.push(reply);
                 s.flush();
                 drop(s);

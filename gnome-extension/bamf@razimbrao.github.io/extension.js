@@ -103,12 +103,12 @@ class BamfIndicator extends PanelMenu.Button {
 
     showStatus(s) {
         let icon, text;
-        if (s.paused) {
-            [icon, text] = ['media-playback-pause-symbolic', 'Paused here'];
-        } else if (!s.connected) {
+        // The pause state is shared with the server: flipping it here or
+        // on Windows changes it on both machines.
+        if (!s.connected) {
             [icon, text] = ['network-offline-symbolic', 'Waiting for the server'];
-        } else if (s.server_paused) {
-            [icon, text] = ['media-playback-pause-symbolic', 'Paused on the server'];
+        } else if (s.paused) {
+            [icon, text] = ['media-playback-pause-symbolic', 'Paused on both machines'];
         } else if (s.remote) {
             [icon, text] = ['input-keyboard-symbolic', 'Keyboard and mouse are here'];
         } else {

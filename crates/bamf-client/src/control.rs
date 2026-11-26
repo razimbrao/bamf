@@ -6,7 +6,7 @@
 //! ```text
 //! extension -> client   pause | resume | toggle | status
 //!                       clip <mime> <base64>      local clipboard changed
-//! client -> extension   status connected=<0|1> remote=<0|1> paused=<0|1> server_paused=<0|1>
+//! client -> extension   status connected=<0|1> remote=<0|1> paused=<0|1>
 //!                       clip <mime> <base64>      set the local clipboard
 //! ```
 //!
@@ -50,17 +50,15 @@ pub struct Status {
     pub connected: bool,
     /// Keyboard and mouse are currently on this machine.
     pub remote: bool,
-    /// Paused here.
+    /// bamf is paused (shared by both machines; either can change it).
     pub paused: bool,
-    /// Paused on the server.
-    pub server_paused: bool,
 }
 
 impl Status {
     pub fn line(&self) -> String {
         format!(
-            "status connected={} remote={} paused={} server_paused={}\n",
-            self.connected as u8, self.remote as u8, self.paused as u8, self.server_paused as u8
+            "status connected={} remote={} paused={}\n",
+            self.connected as u8, self.remote as u8, self.paused as u8
         )
     }
 }
@@ -176,10 +174,7 @@ mod tests {
             paused: true,
             ..Status::default()
         };
-        assert_eq!(
-            s.line(),
-            "status connected=1 remote=0 paused=1 server_paused=0\n"
-        );
+        assert_eq!(s.line(), "status connected=1 remote=0 paused=1\n");
         assert_eq!(clip_line("text/plain", b"hi"), "clip text/plain aGk=\n");
     }
 }

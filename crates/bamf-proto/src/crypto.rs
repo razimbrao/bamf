@@ -212,8 +212,8 @@ mod tests {
         let dgram = server.seal(&msg);
         assert_eq!(client.open(&dgram).unwrap(), msg);
 
-        let ping = client.seal(&Message::Ping { paused: false });
-        assert_eq!(server.open(&ping).unwrap(), Message::Ping { paused: false });
+        let ping = client.seal(&Message::Ping { pause: None });
+        assert_eq!(server.open(&ping).unwrap(), Message::Ping { pause: None });
     }
 
     #[test]

@@ -22,13 +22,13 @@ fn ping_and_state_over_localhost() {
     let mut client = Session::new(&key, Direction::ClientToServer);
 
     client_sock
-        .send(&client.seal(&Message::Ping { paused: false }))
+        .send(&client.seal(&Message::Ping { pause: None }))
         .unwrap();
     let mut buf = [0u8; 1500];
     let (len, client_addr) = server_sock.recv_from(&mut buf).unwrap();
     assert_eq!(
         server.open(&buf[..len]).unwrap(),
-        Message::Ping { paused: false }
+        Message::Ping { pause: None }
     );
 
     let mut keys = KeyState::default();

@@ -117,13 +117,14 @@ would also allow reading every input device.
 
 ## Pause and resume
 
-Each side has its own pause switch: the tray icon on Windows
+Pause is one shared switch, stored on the server and changed from either
+side: the tray icon on Windows
 (`windows/tray.rs`, a hidden window plus `Shell_NotifyIconW`), and on Linux
 the client's control socket (`$XDG_RUNTIME_DIR/bamf.sock`, a line protocol
 described in `bamf-client/src/control.rs`), driven by the GNOME Shell
-extension or `bamf-client pause|resume|toggle`. Pings carry the client's
-flag, the server's reply carries its own, and the cursor only crosses while
-neither is set.
+extension or `bamf-client pause|resume|toggle`. A switch flipped on the
+client rides on its pings until the server's reply confirms it; every reply
+carries the state, so both icons always agree.
 
 ## Clipboard
 
