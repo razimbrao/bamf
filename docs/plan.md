@@ -113,9 +113,10 @@ Done (2026-11-26):
 
 Next:
 
-- Custom icon artwork (tray and panel).
-- Run as a background service (Windows startup task, systemd user unit),
-  without a console window.
+- Done later the same day: pixel-art imp icons (tray and panel), left
+  click pauses and right click opens the menu, and start at login
+  (`bamf-server install`, a Run registry entry with no console window;
+  a systemd user service on Linux).
 - LAN discovery and pairing UX instead of copying a key by hand.
 
 ### Phase 3 — Stretch

@@ -1,6 +1,7 @@
 //! Windows glue: low-level hooks, cursor handling and networking threads
 //! around the platform-independent [`Controller`].
 
+pub mod app;
 mod clipboard;
 mod ffi;
 mod sync;

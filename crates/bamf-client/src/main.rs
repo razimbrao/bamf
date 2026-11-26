@@ -19,7 +19,7 @@ const USAGE: &str = "\
 bamf-client — receive keyboard and mouse from a bamf server
 
 USAGE:
-    bamf-client [CONFIG]     run with CONFIG (default: bamf-client.toml)
+    bamf-client [CONFIG]     run with CONFIG
     bamf-client keygen       print a new random pre-shared key
     bamf-client pause        pause the running client (input stays on the server)
     bamf-client resume       resume it
@@ -27,7 +27,26 @@ USAGE:
     bamf-client status       print the running client's status
     bamf-client --help
 
-Set BAMF_DEBUG=1 for verbose logs.";
+CONFIG defaults to bamf-client.toml in the current directory, or else
+~/.config/bamf/bamf-client.toml. Set BAMF_DEBUG=1 for verbose logs.";
+
+/// The config file to use: the one given, else `bamf-client.toml` in the
+/// current directory, else `$XDG_CONFIG_HOME/bamf/bamf-client.toml` (where
+/// the systemd service expects it).
+fn config_path(arg: Option<&str>) -> std::path::PathBuf {
+    if let Some(path) = arg {
+        return path.into();
+    }
+    let here = std::path::PathBuf::from(DEFAULT_CONFIG);
+    if here.exists() {
+        return here;
+    }
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
+        .map(|dir| dir.join("bamf").join(DEFAULT_CONFIG))
+        .unwrap_or(here)
+}
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub struct Settings {
@@ -59,7 +78,7 @@ fn main() {
         }
         Some("keygen") => keygen(),
         Some(cmd @ ("pause" | "resume" | "toggle" | "status")) => send_command(cmd),
-        path => Config::load(path.unwrap_or(DEFAULT_CONFIG))
+        path => Config::load(&config_path(path).to_string_lossy())
             .and_then(|c| Settings::from_config(&c))
             .and_then(run),
     };

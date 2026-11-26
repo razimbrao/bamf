@@ -1,0 +1,16 @@
+[Unit]
+Description=bamf client (keyboard and mouse from the bamf server)
+Documentation=https://github.com/razimbrao/bamf
+# Inside the graphical session: /dev/uinput access (uaccess) belongs to the
+# active session, and the GNOME extension connects to the control socket.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/bamf-client %h/.config/bamf/bamf-client.toml
+# uinput access is granted as the session starts; retry until it is there.
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

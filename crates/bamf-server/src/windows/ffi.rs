@@ -251,6 +251,36 @@ extern "system" {
     pub fn RegisterClipboardFormatW(name: *const u16) -> u32;
 }
 
+pub const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
+pub const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+pub const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+pub const GENERIC_WRITE: u32 = 0x4000_0000;
+pub const FILE_SHARE_WRITE: u32 = 0x2;
+pub const OPEN_EXISTING: u32 = 3;
+pub const INVALID_HANDLE_VALUE: isize = -1;
+pub const MB_OK: u32 = 0;
+pub const MB_ICONERROR: u32 = 0x10;
+pub const HKEY_CURRENT_USER: isize = 0x8000_0001u32 as i32 as isize;
+pub const REG_SZ: u32 = 1;
+
+#[link(name = "user32")]
+extern "system" {
+    pub fn MessageBoxW(hwnd: HWND, text: *const u16, caption: *const u16, flags: u32) -> i32;
+}
+
+#[link(name = "advapi32")]
+extern "system" {
+    pub fn RegSetKeyValueW(
+        key: isize,
+        subkey: *const u16,
+        value: *const u16,
+        kind: u32,
+        data: *const c_void,
+        len: u32,
+    ) -> i32;
+    pub fn RegDeleteKeyValueW(key: isize, subkey: *const u16, value: *const u16) -> i32;
+}
+
 #[link(name = "shell32")]
 extern "system" {
     pub fn Shell_NotifyIconW(message: u32, data: *const NOTIFYICONDATAW) -> BOOL;
@@ -260,6 +290,17 @@ extern "system" {
 extern "system" {
     pub fn SetConsoleCtrlHandler(handler: Option<CtrlHandler>, add: BOOL) -> BOOL;
     pub fn GetModuleHandleW(name: *const u16) -> isize;
+    pub fn AttachConsole(pid: u32) -> BOOL;
+    pub fn SetStdHandle(which: u32, handle: isize) -> BOOL;
+    pub fn CreateFileW(
+        name: *const u16,
+        access: u32,
+        share: u32,
+        security: *const c_void,
+        disposition: u32,
+        flags: u32,
+        template: isize,
+    ) -> isize;
     pub fn GlobalAlloc(flags: u32, bytes: usize) -> HGLOBAL;
     pub fn GlobalLock(mem: HGLOBAL) -> *mut c_void;
     pub fn GlobalUnlock(mem: HGLOBAL) -> BOOL;

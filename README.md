@@ -95,7 +95,30 @@ are allowed.
 Move the cursor to the configured edge. **Scroll Lock** always brings input
 back to Windows. `BAMF_DEBUG=1` enables verbose logs.
 
-### 6. GNOME panel icon and clipboard (Linux)
+### 6. Start automatically
+
+Windows, from a normal PowerShell (copy the program out of `target` so
+rebuilding does not lock it):
+
+```powershell
+$dir = "$env:USERPROFILE\bamf"; New-Item -ItemType Directory -Force $dir | Out-Null
+Copy-Item target\release\bamf-server.exe, bamf-server.toml $dir
+& "$dir\bamf-server.exe" install "$dir\bamf-server.toml"
+```
+
+It then starts at every login without a console window; logs go to
+`%LOCALAPPDATA%\bamf\bamf-server.log`. `bamf-server uninstall` undoes it.
+
+Linux, as a systemd user service that starts with the graphical session:
+
+```sh
+sh packaging/linux/install-service.sh
+journalctl --user -u bamf-client -f    # logs
+```
+
+The config moves to `~/.config/bamf/bamf-client.toml`.
+
+### 7. GNOME panel icon and clipboard (Linux)
 
 GNOME does not let background programs read or write the Wayland
 clipboard, so clipboard sync on Linux goes through a small GNOME Shell
