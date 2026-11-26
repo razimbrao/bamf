@@ -34,8 +34,16 @@ impl Button {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
-    /// Client liveness signal.
-    Ping,
+    /// Client liveness signal, every 500 ms. `paused`: the user paused bamf
+    /// on the client, so the server must not send input there.
+    Ping {
+        paused: bool,
+    },
+    /// Server reply to every ping. `paused`: the user paused bamf on the
+    /// server.
+    Status {
+        paused: bool,
+    },
     /// The cursor entered the client screen at an absolute position.
     Enter {
         x: u16,
@@ -74,6 +82,7 @@ pub enum Message {
 
 mod tag {
     pub const PING: u8 = 0x01;
+    pub const STATUS: u8 = 0x02;
     pub const ENTER: u8 = 0x10;
     pub const LEAVE: u8 = 0x11;
     pub const MOUSE_ABS: u8 = 0x12;
@@ -110,7 +119,8 @@ impl std::error::Error for DecodeError {}
 impl Message {
     pub fn encode(&self, out: &mut Vec<u8>) {
         match self {
-            Message::Ping => out.push(tag::PING),
+            Message::Ping { paused } => out.extend_from_slice(&[tag::PING, *paused as u8]),
+            Message::Status { paused } => out.extend_from_slice(&[tag::STATUS, *paused as u8]),
             Message::Enter { x, y } => {
                 out.push(tag::ENTER);
                 out.extend_from_slice(&x.to_le_bytes());
@@ -174,8 +184,16 @@ impl Message {
 
         let msg = match tag {
             tag::PING => {
-                expect(0)?;
-                Message::Ping
+                expect(1)?;
+                Message::Ping {
+                    paused: bool_at(0)?,
+                }
+            }
+            tag::STATUS => {
+                expect(1)?;
+                Message::Status {
+                    paused: bool_at(0)?,
+                }
             }
             tag::ENTER => {
                 expect(4)?;
@@ -255,7 +273,9 @@ mod tests {
         keys.set(30, true);
         keys.set(255, true);
         for msg in [
-            Message::Ping,
+            Message::Ping { paused: false },
+            Message::Ping { paused: true },
+            Message::Status { paused: true },
             Message::Enter { x: 0, y: 65535 },
             Message::Leave,
             Message::MouseAbs { x: 123, y: 456 },

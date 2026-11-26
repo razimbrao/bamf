@@ -1,6 +1,9 @@
 //! bamf-client: receives keyboard and mouse events from the bamf server and
 //! injects them into Linux through uinput.
 
+// Only used by the Linux runtime, but compiled (and tested) everywhere.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod control;
 #[cfg(target_os = "linux")]
 mod linux;
 // Only used by the Linux runtime, but compiled (and tested) everywhere.
@@ -18,6 +21,10 @@ bamf-client — receive keyboard and mouse from a bamf server
 USAGE:
     bamf-client [CONFIG]     run with CONFIG (default: bamf-client.toml)
     bamf-client keygen       print a new random pre-shared key
+    bamf-client pause        pause the running client (input stays on the server)
+    bamf-client resume       resume it
+    bamf-client toggle       pause or resume
+    bamf-client status       print the running client's status
     bamf-client --help
 
 Set BAMF_DEBUG=1 for verbose logs.";
@@ -51,6 +58,7 @@ fn main() {
             Ok(())
         }
         Some("keygen") => keygen(),
+        Some(cmd @ ("pause" | "resume" | "toggle" | "status")) => send_command(cmd),
         path => Config::load(path.unwrap_or(DEFAULT_CONFIG))
             .and_then(|c| Settings::from_config(&c))
             .and_then(run),
@@ -70,6 +78,16 @@ fn keygen() -> Result<(), String> {
 #[cfg(target_os = "linux")]
 fn run(settings: Settings) -> Result<(), String> {
     linux::run(settings)
+}
+
+#[cfg(target_os = "linux")]
+fn send_command(cmd: &str) -> Result<(), String> {
+    linux::send_command(cmd)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn send_command(_cmd: &str) -> Result<(), String> {
+    Err("bamf-client only runs on Linux".into())
 }
 
 #[cfg(not(target_os = "linux"))]

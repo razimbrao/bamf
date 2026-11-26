@@ -12,7 +12,7 @@ All integers are little-endian.
 ```
 +---------+-----------+-------------+----------------------------------+
 | version | direction | counter     | ciphertext + 16-byte Poly1305 tag|
-| u8 (=1) | u8        | u64         |                                  |
+| u8 (=2) | u8        | u64         |                                  |
 +---------+-----------+-------------+----------------------------------+
  \______________ header (10 bytes, used as AAD) ___/
 ```
@@ -35,7 +35,8 @@ The plaintext is one message: a `u8` tag followed by its fields.
 
 | Tag | Name | Direction | Fields |
 |---|---|---|---|
-| `0x01` | `Ping` | C → S | — |
+| `0x01` | `Ping` | C → S | `paused: u8` (the user paused bamf on the client) |
+| `0x02` | `Status` | S → C | `paused: u8` (the user paused bamf on the server); reply to every `Ping` |
 | `0x10` | `Enter` | S → C | `x: u16`, `y: u16` (absolute position, 0–65535) |
 | `0x11` | `Leave` | S → C | — |
 | `0x12` | `MouseAbs` | S → C | `x: u16`, `y: u16` |
@@ -44,6 +45,10 @@ The plaintext is one message: a `u8` tag followed by its fields.
 | `0x15` | `Wheel` | S → C | `vertical: i16`, `horizontal: i16` (units of 1/120 notch) |
 | `0x16` | `Key` | S → C | `seq: u32`, `code: u16` (evdev), `down: u8` |
 | `0x17` | `State` | S → C | `keys: [u8; 32]` (bitmap of evdev codes 0–255), `buttons: u8` |
+
+Version 2 added the pause flags. The cursor only crosses while neither side
+is paused; pausing either side while the cursor is on the client sends it
+back to the server.
 
 Buttons: `0` left, `1` right, `2` middle, `3` back (X1), `4` forward (X2).
 The `buttons` field of `State` is a bitmask using the same indices.

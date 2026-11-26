@@ -2,6 +2,7 @@
 //! around the platform-independent [`Controller`].
 
 mod ffi;
+mod tray;
 
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -165,6 +166,7 @@ unsafe extern "system" fn ctrl_handler(_ctrl_type: u32) -> BOOL {
             s.flush();
         }
     }
+    tray::remove();
     restore_cursors();
     0 // let the default handler terminate the process
 }
@@ -196,12 +198,16 @@ fn receive_loop(socket: UdpSocket) {
         };
         let mut s = server();
         match s.session.open(&buf[..len]) {
-            Ok(Message::Ping) => {
+            Ok(Message::Ping { paused }) => {
                 if s.client != Some(addr) {
                     bamf_proto::info!("client connected from {addr}");
                     s.client = Some(addr);
                 }
-                s.controller.on_ping(Instant::now());
+                let reply = s.controller.on_ping(Instant::now(), paused);
+                s.controller.outbox.push(reply);
+                s.flush();
+                drop(s);
+                tray::notify(tray::current_status());
             }
             Ok(other) => bamf_proto::debug!("unexpected message from client: {other:?}"),
             Err(e) => bamf_proto::debug!("dropped datagram from {addr}: {e}"),
@@ -209,12 +215,17 @@ fn receive_loop(socket: UdpSocket) {
     }
 }
 
+fn on_clipboard_changed() {}
+
 fn heartbeat_loop() {
     loop {
         std::thread::sleep(Duration::from_millis(STATE_INTERVAL_MS));
-        let mut s = server();
-        s.controller.tick(Instant::now());
-        s.flush();
+        {
+            let mut s = server();
+            s.controller.tick(Instant::now());
+            s.flush();
+        }
+        tray::notify(tray::current_status());
     }
 }
 
@@ -295,18 +306,32 @@ pub fn run(settings: Settings) -> Result<(), String> {
         if mouse == 0 || keyboard == 0 {
             return Err("failed to install input hooks".into());
         }
+        tray::create(tray::Hooks {
+            clipboard_changed: on_clipboard_changed,
+        })?;
         bamf_proto::info!(
             "listening on {} — waiting for the client (Scroll Lock = back to Windows)",
             settings.listen
         );
 
-        // Low-level hooks are called on this thread while it pumps messages.
+        // Low-level hooks are called on this thread while it pumps messages;
+        // the tray window's messages are dispatched by the same loop.
         let mut msg: MSG = std::mem::zeroed();
-        while GetMessageW(&mut msg, 0, 0, 0) > 0 {}
+        while GetMessageW(&mut msg, 0, 0, 0) > 0 {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
 
         UnhookWindowsHookEx(mouse);
         UnhookWindowsHookEx(keyboard);
     }
+    tray::remove();
+    {
+        let mut s = server();
+        s.controller.force_local();
+        s.flush();
+    }
     restore_cursors();
+    bamf_proto::info!("bye");
     Ok(())
 }

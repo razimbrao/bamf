@@ -21,10 +21,15 @@ fn ping_and_state_over_localhost() {
     let mut server = Session::new(&key, Direction::ServerToClient);
     let mut client = Session::new(&key, Direction::ClientToServer);
 
-    client_sock.send(&client.seal(&Message::Ping)).unwrap();
+    client_sock
+        .send(&client.seal(&Message::Ping { paused: false }))
+        .unwrap();
     let mut buf = [0u8; 1500];
     let (len, client_addr) = server_sock.recv_from(&mut buf).unwrap();
-    assert_eq!(server.open(&buf[..len]).unwrap(), Message::Ping);
+    assert_eq!(
+        server.open(&buf[..len]).unwrap(),
+        Message::Ping { paused: false }
+    );
 
     let mut keys = KeyState::default();
     keys.set(42, true);

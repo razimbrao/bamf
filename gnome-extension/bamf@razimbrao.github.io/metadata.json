@@ -1,0 +1,7 @@
+{
+  "uuid": "bamf@razimbrao.github.io",
+  "name": "bamf",
+  "description": "Panel icon for the bamf client: pause or resume sharing the keyboard and mouse, and sync the clipboard with the bamf server.",
+  "shell-version": ["47", "48", "49", "50"],
+  "url": "https://github.com/razimbrao/bamf"
+}

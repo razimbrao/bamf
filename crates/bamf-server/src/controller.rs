@@ -84,6 +84,10 @@ pub struct Controller<P: Platform> {
     local_buttons: u8,
     key_seq: u32,
     last_ping: Option<Instant>,
+    /// The user paused bamf on this machine (tray icon).
+    paused: bool,
+    /// The user paused bamf on the client (reported in every ping).
+    client_paused: bool,
     /// Messages to send to the client, drained by the caller.
     pub outbox: Vec<Message>,
 }
@@ -101,6 +105,8 @@ impl<P: Platform> Controller<P> {
             local_buttons: 0,
             key_seq: 0,
             last_ping: None,
+            paused: false,
+            client_paused: false,
             outbox: Vec::new(),
         }
     }
@@ -114,8 +120,46 @@ impl<P: Platform> Controller<P> {
             .is_some_and(|t| now.duration_since(t) < Duration::from_millis(CLIENT_TIMEOUT_MS))
     }
 
-    pub fn on_ping(&mut self, now: Instant) {
+    /// True when the cursor may cross: the client answers and nobody paused.
+    pub fn can_cross(&self, now: Instant) -> bool {
+        self.client_alive(now) && !self.paused && !self.client_paused
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused
+    }
+
+    pub fn is_client_paused(&self) -> bool {
+        self.client_paused
+    }
+
+    /// Records a client ping; returns the reply to send back.
+    pub fn on_ping(&mut self, now: Instant, client_paused: bool) -> Message {
         self.last_ping = Some(now);
+        if client_paused != self.client_paused {
+            bamf_proto::info!(
+                "client {}",
+                if client_paused { "paused" } else { "resumed" }
+            );
+            self.client_paused = client_paused;
+            if client_paused {
+                self.force_local();
+            }
+        }
+        Message::Status {
+            paused: self.paused,
+        }
+    }
+
+    /// Pauses or resumes bamf on this machine. Pausing takes input back.
+    pub fn set_paused(&mut self, paused: bool) {
+        if paused != self.paused {
+            bamf_proto::info!("{}", if paused { "paused" } else { "resumed" });
+            self.paused = paused;
+            if paused {
+                self.force_local();
+            }
+        }
     }
 
     /// Periodic housekeeping: leave remote mode if the client vanished,
@@ -235,8 +279,7 @@ impl<P: Platform> Controller<P> {
         match event {
             MouseEvent::Move { x, y } => {
                 // Never cross while dragging something.
-                if self.local_buttons == 0 && self.geometry.at_edge(x, y) && self.client_alive(now)
-                {
+                if self.local_buttons == 0 && self.geometry.at_edge(x, y) && self.can_cross(now) {
                     self.enter(x, y);
                     return Verdict::Block;
                 }
@@ -328,7 +371,7 @@ mod tests {
         };
         let mut c = Controller::new(FakePlatform::default(), geometry, mode, PARK);
         let now = Instant::now();
-        c.on_ping(now);
+        c.on_ping(now, false);
         (c, now)
     }
 
@@ -357,6 +400,30 @@ mod tests {
         assert!(c.platform.hidden);
         assert_eq!(c.platform.cursor, PARK);
         assert!(matches!(c.outbox[0], Message::Enter { x: 0, .. }));
+    }
+
+    #[test]
+    fn pausing_either_side_blocks_crossing_and_takes_input_back() {
+        let (mut c, now) = controller(PointerMode::Absolute);
+        c.set_paused(true);
+        assert_eq!(c.on_mouse(mv(1919, 500), now), Verdict::Pass);
+        assert_eq!(c.on_ping(now, false), Message::Status { paused: true });
+        c.set_paused(false);
+        enter(&mut c, now);
+
+        // The client pauses while the cursor is over there.
+        assert_eq!(c.on_ping(now, true), Message::Status { paused: false });
+        assert!(!c.is_remote());
+        assert_eq!(c.outbox, vec![Message::Leave]);
+        c.outbox.clear();
+        assert_eq!(c.on_mouse(mv(1919, 500), now), Verdict::Pass);
+
+        c.on_ping(now, false);
+        assert_eq!(c.on_mouse(mv(1919, 500), now), Verdict::Block);
+        assert!(c.is_remote());
+
+        c.set_paused(true);
+        assert!(!c.is_remote());
     }
 
     #[test]

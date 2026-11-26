@@ -18,6 +18,7 @@ pub struct ClientState {
     last_seq: Option<u32>,
     keys: KeyState,
     buttons: u8,
+    server_paused: bool,
 }
 
 impl ClientState {
@@ -25,9 +26,14 @@ impl ClientState {
         self.active
     }
 
+    pub fn is_server_paused(&self) -> bool {
+        self.server_paused
+    }
+
     pub fn handle(&mut self, msg: Message, out: &mut Vec<Action>) {
         match msg {
-            Message::Ping => {}
+            Message::Ping { .. } => {}
+            Message::Status { paused } => self.server_paused = paused,
             Message::Enter { x, y } => {
                 self.active = true;
                 self.last_seq = None;

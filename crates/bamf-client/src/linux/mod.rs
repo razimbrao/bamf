@@ -1,15 +1,20 @@
 //! Linux glue: UDP loop plus injection through uinput virtual devices.
 
+mod control;
 mod uinput;
+
+pub use control::send_command;
 
 use std::io::{ErrorKind, Read};
 use std::net::UdpSocket;
 use std::time::{Duration, Instant};
 
 use bamf_proto::{
-    Button, Direction, Key, Message, Session, ABS_MAX, PING_INTERVAL_MS, SERVER_TIMEOUT_MS,
+    Button, Direction, Key, Message, Session, ABS_MAX, CLIENT_TIMEOUT_MS, PING_INTERVAL_MS,
+    SERVER_TIMEOUT_MS,
 };
 
+use crate::control::{Command, Status};
 use crate::state::{Action, ClientState};
 use crate::Settings;
 use uinput::*;
@@ -165,6 +170,7 @@ pub fn run(settings: Settings) -> Result<(), String> {
         .set_read_timeout(Some(Duration::from_millis(100)))
         .map_err(|e| e.to_string())?;
 
+    let mut control = control::Control::bind()?;
     let mut session = Session::new(&settings.key, Direction::ClientToServer);
     let mut state = ClientState::default();
     let mut actions = Vec::new();
@@ -173,13 +179,51 @@ pub fn run(settings: Settings) -> Result<(), String> {
     let mut last_rx: Option<Instant> = None;
     let ping_every = Duration::from_millis(PING_INTERVAL_MS);
     let server_timeout = Duration::from_millis(SERVER_TIMEOUT_MS);
+    let link_timeout = Duration::from_millis(CLIENT_TIMEOUT_MS);
+    let mut paused = false;
+    let mut shown = Status::default();
 
-    bamf_proto::info!("pinging server at {}", settings.server);
+    bamf_proto::info!(
+        "pinging server at {}; control socket {}",
+        settings.server,
+        control::socket_path().display()
+    );
 
     loop {
+        let status = Status {
+            connected: last_rx.is_some_and(|t| t.elapsed() < link_timeout),
+            remote: state.is_active(),
+            paused,
+            server_paused: state.is_server_paused(),
+        };
+        let mut force_status = false;
+        for cmd in control.poll(&status.line()) {
+            let was = paused;
+            match cmd {
+                Command::Pause => paused = true,
+                Command::Resume => paused = false,
+                Command::Toggle => paused = !paused,
+                Command::Status => {}
+                Command::Clip { mime, data } => {
+                    bamf_proto::debug!("clipboard {mime}, {} bytes (not wired yet)", data.len());
+                }
+            }
+            if paused != was {
+                bamf_proto::info!("{}", if paused { "paused" } else { "resumed" });
+                // Tell the server right away instead of at the next ping.
+                last_ping = None;
+            }
+            force_status = true;
+        }
+        let status = Status { paused, ..status };
+        if status != shown || force_status {
+            control.broadcast(&status.line());
+            shown = status;
+        }
+
         if last_ping.is_none_or(|t| t.elapsed() >= ping_every) {
             // Errors (e.g. server not up yet) are expected; keep trying.
-            let _ = socket.send(&session.seal(&Message::Ping));
+            let _ = socket.send(&session.seal(&Message::Ping { paused }));
             last_ping = Some(Instant::now());
         }
 

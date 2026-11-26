@@ -17,7 +17,7 @@ pub use message::{Button, Message};
 pub const DEFAULT_PORT: u16 = 24242;
 
 /// Protocol version carried in every datagram header.
-pub const PROTOCOL_VERSION: u8 = 1;
+pub const PROTOCOL_VERSION: u8 = 2;
 
 /// Maximum value of an absolute coordinate.
 pub const ABS_MAX: u16 = u16::MAX;
