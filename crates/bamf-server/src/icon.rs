@@ -39,7 +39,16 @@ const ART: [&str; N] = [
 const SLIT_ROW: usize = 8;
 
 /// Pixels of the "z" drawn in the top-right corner while asleep.
-const Z: [(usize, usize); 8] = [(13, 0), (14, 0), (15, 0), (15, 1), (14, 2), (13, 3), (14, 3), (15, 3)];
+const Z: [(usize, usize); 8] = [
+    (13, 0),
+    (14, 0),
+    (15, 0),
+    (15, 1),
+    (14, 2),
+    (13, 3),
+    (14, 3),
+    (15, 3),
+];
 
 type Rgb = [u8; 3];
 
