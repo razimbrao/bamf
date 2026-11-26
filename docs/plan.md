@@ -56,7 +56,7 @@ controlled by bamf; it remains the fallback for cases bamf does not cover:
 | Protocol, encryption, config | Done, unit-tested (RFC 8439 vectors) |
 | Windows server | Done; tested with the real client |
 | Linux client | Done; tested on Fedora 43 (GNOME, Wayland) |
-| Phase 0 hardware validation | R1–R3 passed; R4, R5 not yet tested |
+| Phase 0 hardware validation | Done: R1–R5 passed |
 
 ### Phase 0 results (2026-11-26)
 
@@ -71,6 +71,9 @@ same /24, laptop screen 1920x1080 at 125 % scale (1536x864 logical).
 - **R2 passed.** No noticeable lag over Wi-Fi.
 - **R3 passed.** Crossing, keyboard (ABNT2) and the return edge work; Windows
   does not react while in remote mode.
+- **R4 passed.** Crossing works with an elevated window focused.
+- **R5 passed.** Holding Shift and turning Wi-Fi off on the laptop: the client
+  released the key on its own; typing afterwards produced lowercase letters.
 
 ## Roadmap
 
