@@ -3,8 +3,8 @@
 //! connection wins.
 //!
 //! Threads: one accepts connections, one reads the current connection and
-//! sets the local clipboard, one converts and sends local changes. The main
-//! (input) thread only copies the clipboard out and hands it over.
+//! sets the local clipboard, one reads, converts and sends local changes.
+//! The main (input) thread only signals that the clipboard changed.
 
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -13,7 +13,9 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use bamf_proto::stream::{read_frame, write_frame, EchoGuard, MAX_CLIP};
 use bamf_proto::{Direction, Key, Message, Session};
 
-use super::clipboard::{self, Local};
+use std::time::Duration;
+
+use super::clipboard;
 use super::tray;
 
 struct Shared {
@@ -22,7 +24,7 @@ struct Shared {
     /// Kept across connections, so its counter only grows.
     send: Mutex<Session>,
     guard: Mutex<EchoGuard>,
-    changes: Mutex<Sender<Local>>,
+    changes: Mutex<Sender<()>>,
 }
 
 static SHARED: OnceLock<Shared> = OnceLock::new();
@@ -65,13 +67,15 @@ pub fn connected() -> bool {
 
 /// Called on the main thread when the local clipboard changed.
 pub fn clipboard_changed() {
-    if !connected() {
-        return;
-    }
-    if let Some(local) = clipboard::read(tray::window()) {
-        let _ = lock(&shared().changes).send(local);
+    if connected() {
+        let _ = lock(&shared().changes).send(());
     }
 }
+
+/// Wait this long after a change before reading: the application that
+/// just copied may still be using the clipboard (opening it right away
+/// makes some of them fail).
+const SETTLE: Duration = Duration::from_millis(100);
 
 fn accept_loop(listener: TcpListener, receive: Arc<Mutex<Session>>) {
     for (id, stream) in listener.incoming().enumerate() {
@@ -134,12 +138,14 @@ fn read_loop(id: u64, mut stream: TcpStream, receive: Arc<Mutex<Session>>) {
     }
 }
 
-fn send_loop(changes: Receiver<Local>) {
-    while let Ok(mut local) = changes.recv() {
-        // Only the newest content matters.
-        while let Ok(newer) = changes.try_recv() {
-            local = newer;
-        }
+fn send_loop(changes: Receiver<()>) {
+    while changes.recv().is_ok() {
+        std::thread::sleep(SETTLE);
+        // Several quick changes: only the newest content matters.
+        while changes.try_recv().is_ok() {}
+        let Some(local) = clipboard::read(tray::window()) else {
+            continue;
+        };
         let (mime, data) = match local.into_wire() {
             Ok(wire) => wire,
             Err(e) => {
