@@ -54,9 +54,23 @@ controlled by bamf; it remains the fallback for cases bamf does not cover:
 | Item | State |
 |---|---|
 | Protocol, encryption, config | Done, unit-tested (RFC 8439 vectors) |
-| Windows server | Done, builds; core logic unit-tested; not yet tried with a real client |
-| Linux client | Done, type-checked for Linux; state logic unit-tested; not yet run on Fedora |
-| Phase 0 hardware validation (R1–R5) | **Pending**: needs both machines |
+| Windows server | Done; tested with the real client |
+| Linux client | Done; tested on Fedora 43 (GNOME, Wayland) |
+| Phase 0 hardware validation | R1–R3 passed; R4, R5 not yet tested |
+
+### Phase 0 results (2026-11-26)
+
+Setup: Windows 11 server on Ethernet, Fedora 43 laptop client on Wi-Fi,
+same /24, laptop screen 1920x1080 at 125 % scale (1536x864 logical).
+
+- **R1 passed.** The absolute pointer covers the whole GNOME desktop; no need
+  for the relative fallback. One gap found and fixed: GNOME pointer barriers
+  (dock reveal at the bottom edge, hot corner) need the cursor to keep
+  *pushing* against the edge, which an absolute position cannot express. The
+  server now also sends the movement lost to clamping as a relative delta.
+- **R2 passed.** No noticeable lag over Wi-Fi.
+- **R3 passed.** Crossing, keyboard (ABNT2) and the return edge work; Windows
+  does not react while in remote mode.
 
 ## Roadmap
 
