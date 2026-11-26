@@ -1,0 +1,7 @@
+# bamf-client configuration (Linux). Copy to bamf-client.toml.
+
+# Server address. The port defaults to 24242 when omitted.
+server = "192.168.0.10:24242"
+
+# Same pre-shared key as the server (64 hex characters).
+key = "PASTE_THE_GENERATED_KEY_HERE"

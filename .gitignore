@@ -1,0 +1,4 @@
+/target
+# Real config files contain the pre-shared key.
+bamf-server.toml
+bamf-client.toml

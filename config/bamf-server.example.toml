@@ -1,0 +1,19 @@
+# bamf-server configuration (Windows). Copy to bamf-server.toml.
+
+# Address and UDP port to listen on.
+listen = "0.0.0.0:24242"
+
+# Pre-shared key: 64 hex characters. Generate with `bamf-server keygen`
+# and use the same value in the client config.
+key = "PASTE_THE_GENERATED_KEY_HERE"
+
+# Where the client screen is, relative to this one: left, right, top, bottom.
+remote_side = "right"
+
+# Client screen resolution in pixels (logical size, after scaling).
+remote_width = 1920
+remote_height = 1080
+
+# absolute: the server owns the remote cursor position (default).
+# relative: classic mouse deltas; fallback if absolute positioning misbehaves.
+pointer_mode = "absolute"
