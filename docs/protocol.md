@@ -17,7 +17,8 @@ All integers are little-endian.
  \______________ header (10 bytes, used as AAD) ___/
 ```
 
-- `direction`: `0` = server → client, `1` = client → server.
+- `direction`: `0` = server → client, `1` = client → server (UDP);
+  `2` = server → client, `3` = client → server (TCP clipboard stream).
 - Nonce (12 bytes) = `direction` (1 byte) + 3 zero bytes + `counter` (8 bytes).
   Including the direction guarantees that the two sides never reuse a nonce
   with the shared key.
@@ -49,6 +50,25 @@ The plaintext is one message: a `u8` tag followed by its fields.
 Version 2 added the pause flags. The cursor only crosses while neither side
 is paused; pausing either side while the cursor is on the client sends it
 back to the server.
+
+## Clipboard stream (TCP)
+
+The clipboard travels on a TCP connection to the same port, opened by the
+client. Each frame is a `u32` length followed by one sealed message in the
+format above, with the stream directions, so its nonces never collide with
+the UDP ones even though both counters start at the current time. Both
+sides keep their stream sessions across reconnections, so frames recorded
+from an old connection cannot be replayed into a new one. Frames above
+48 MiB are refused.
+
+| Tag | Name | Direction | Fields |
+|---|---|---|---|
+| `0x20` | `Clip` | both | `mime_len: u8`, `mime: [u8]` (UTF-8), `data: [u8]` (rest of the frame) |
+
+`mime` is `text/plain;charset=utf-8` (UTF-8 text, `\n` line endings) or
+`image/png`. Each side remembers a fingerprint of the last content it sent
+or received and does not send the same content again, so setting the local
+clipboard from the peer does not bounce it back.
 
 Buttons: `0` left, `1` right, `2` middle, `3` back (X1), `4` forward (X2).
 The `buttons` field of `State` is a bitmask using the same indices.

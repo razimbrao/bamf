@@ -98,9 +98,24 @@ full workday without falling back to the hardware switch.
 
 ### Phase 2 — Quality of life
 
-- Clipboard sharing (text). Hard on GNOME/Wayland: no `wlr-data-control`.
-- Run as a background service (Windows startup task, systemd user unit).
-- Tray icon / status notifications.
+Done (2026-11-26):
+
+- **Screen alignment**: `remote_offset` maps the shared edge pixel to pixel,
+  like two physical monitors; outside the overlap the edge is a wall.
+- **Pause/resume from both sides** (protocol v2): Windows tray icon,
+  GNOME Shell extension with a panel icon, `bamf-client pause|resume|toggle`.
+- **Clipboard sync, text and images, both ways**, over an encrypted TCP
+  stream. GNOME's Mutter exposes no data-control protocol (checked on
+  GNOME 49: only the focus-bound `wl_data_device` and primary selection),
+  so the Linux side goes through the shell extension, which can use the
+  clipboard without focus. Images travel as PNG; DEFLATE, PNG and DIB
+  conversion are implemented from scratch.
+
+Next:
+
+- Custom icon artwork (tray and panel).
+- Run as a background service (Windows startup task, systemd user unit),
+  without a console window.
 - LAN discovery and pairing UX instead of copying a key by hand.
 
 ### Phase 3 — Stretch
@@ -116,3 +131,7 @@ full workday without falling back to the hardware switch.
   unless the server itself runs elevated.
 - If the server crashes while in remote mode, the Windows cursor may stay
   hidden. Restarting the server restores it.
+- Clipboard on Linux needs the GNOME Shell extension; other desktops would
+  need their own integration.
+- Clipboard content above about 48 MiB is not synced. Pausing stops input
+  sharing only; the clipboard keeps syncing while both sides run.

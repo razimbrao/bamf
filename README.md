@@ -20,10 +20,16 @@ implemented directly on top of the standard library.
 
 ## Status
 
-MVP: one-way control Windows → Linux. Keyboard (including ABNT2 keys),
-mouse movement, five buttons and both wheels, edge switching, encryption,
-stuck-key protection, and a panic key. See [docs/plan.md](docs/plan.md) for
-the roadmap.
+Working on Windows 11 → Fedora (GNOME, Wayland):
+
+- keyboard (including ABNT2 keys), mouse movement, five buttons and both
+  wheels, edge switching, encryption, stuck-key protection, a panic key;
+- **pause/resume from either side**: a tray icon on Windows, a panel icon
+  (GNOME Shell extension) or `bamf-client pause|resume|toggle` on Linux;
+- **clipboard sync both ways**, text and images;
+- optional pixel-to-pixel alignment of the two screens (`remote_offset`).
+
+See [docs/plan.md](docs/plan.md) for the roadmap.
 
 ## Quick start
 
@@ -52,12 +58,18 @@ Copy `config/bamf-server.example.toml` to `bamf-server.toml` (Windows) and
 key in both, set the server IP in the client config and the laptop's screen
 size and side in the server config.
 
+If the laptop sits higher or lower than the monitor, set `remote_offset`
+(pixels from the top of the monitor to the top of the laptop screen) so the
+cursor crosses at the matching height.
+
 ### 4. Allow access
 
-Windows: allow inbound UDP 24242 (Windows asks on first run, or):
+Windows: allow inbound UDP 24242 (input) and TCP 24242 (clipboard), from an
+elevated PowerShell:
 
 ```powershell
-New-NetFirewallRule -DisplayName "bamf" -Direction Inbound -Protocol UDP -LocalPort 24242 -Action Allow
+New-NetFirewallRule -DisplayName "bamf" -Direction Inbound -Protocol UDP -LocalPort 24242 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "bamf clipboard" -Direction Inbound -Protocol TCP -LocalPort 24242 -Action Allow -Profile Private
 ```
 
 Linux: let your user create virtual input devices:
@@ -83,6 +95,26 @@ are allowed.
 Move the cursor to the configured edge. **Scroll Lock** always brings input
 back to Windows. `BAMF_DEBUG=1` enables verbose logs.
 
+### 6. GNOME panel icon and clipboard (Linux)
+
+GNOME does not let background programs read or write the Wayland
+clipboard, so clipboard sync on Linux goes through a small GNOME Shell
+extension, which also adds the panel icon:
+
+```sh
+sh gnome-extension/install.sh
+```
+
+Log out and back in once (Wayland only picks up new extensions in a new
+session), then `gnome-extensions enable bamf@razimbrao.github.io`.
+
+Without the extension everything else works, and the client can still be
+paused from a terminal or a keyboard shortcut:
+
+```sh
+./target/release/bamf-client toggle   # or pause, resume, status
+```
+
 ## Tips
 
 - **Wi-Fi latency**: disable Wi-Fi power saving on the laptop if the cursor
@@ -91,6 +123,8 @@ back to Windows. `BAMF_DEBUG=1` enables verbose logs.
 - **Admin windows**: Windows does not deliver input to the hooks while an
   elevated window is focused. Run the server as administrator to cover those.
 - `Ctrl+Alt+Del` and `Win+L` always go to Windows (secure desktop).
+- **Tray icon** (Windows): purple = ready, amber = waiting for the client,
+  grey = paused. Right-click for Pause/Resume and Quit.
 
 ## Documentation
 

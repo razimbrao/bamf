@@ -115,6 +115,36 @@ would also allow reading every input device.
 - `Leave` or `State` with an empty set → release keys/buttons accordingly.
 - No packet from the server for 1 s while in remote mode → release everything.
 
+## Pause and resume
+
+Each side has its own pause switch: the tray icon on Windows
+(`windows/tray.rs`, a hidden window plus `Shell_NotifyIconW`), and on Linux
+the client's control socket (`$XDG_RUNTIME_DIR/bamf.sock`, a line protocol
+described in `bamf-client/src/control.rs`), driven by the GNOME Shell
+extension or `bamf-client pause|resume|toggle`. Pings carry the client's
+flag, the server's reply carries its own, and the cursor only crosses while
+neither is set.
+
+## Clipboard
+
+```
+ Windows                          TCP (encrypted)        Linux
+ WM_CLIPBOARDUPDATE ─► read ─► convert ─► send ════► client ─► socket ─► extension ─► St.Clipboard
+ SetClipboardData ◄── convert ◄── receive ◄════════ client ◄─ socket ◄─ extension ◄─ owner-changed
+```
+
+- Windows (`windows/clipboard.rs`, `windows/sync.rs`): the main thread only
+  copies the clipboard out; conversion and network I/O run on their own
+  threads so input is never delayed. Text wins over images. Images are read
+  from the registered `PNG` format when an application offers it, otherwise
+  from `CF_DIB`, and written as both.
+- Linux: GNOME does not give background programs access to the Wayland
+  clipboard, so the shell extension watches it (`Meta.Selection`
+  `owner-changed`) and sets it (`St.Clipboard`), exchanging base64 lines
+  with the client.
+- `bamf-server/src/image/` holds DEFLATE (fixed-Huffman LZ77), inflate,
+  PNG and DIB code, all tested against data produced by Python's zlib.
+
 ## Key codes
 
 The protocol carries **Linux evdev key codes** (`input-event-codes.h`) as the
