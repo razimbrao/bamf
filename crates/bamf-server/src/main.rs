@@ -7,15 +7,25 @@
 // The core modules are only used by the Windows runtime, but they are
 // compiled (and tested) everywhere.
 #[cfg_attr(not(windows), allow(dead_code))]
+mod canvas;
+#[cfg_attr(not(windows), allow(dead_code))]
 mod controller;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod geometry;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod history;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod icon;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod image;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod keymap;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod layout;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod panel;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod pixfont;
 #[cfg(windows)]
 mod windows;
 
@@ -69,10 +79,12 @@ pub struct Settings {
     pub remote_height: u32,
     pub mode: PointerMode,
     pub offset: Option<i32>,
+    /// Where the settings window saves the screen arrangement.
+    pub config_path: std::path::PathBuf,
 }
 
 impl Settings {
-    fn from_config(c: &Config) -> Result<Self, String> {
+    fn from_config(c: &Config, config_path: std::path::PathBuf) -> Result<Self, String> {
         let settings = Settings {
             listen: c
                 .str("listen")
@@ -84,6 +96,7 @@ impl Settings {
             remote_height: c.parse_or("remote_height", 1080)?,
             mode: c.parse_or("pointer_mode", PointerMode::Absolute)?,
             offset: c.parse_opt("remote_offset")?,
+            config_path,
         };
         if settings.remote_width < 2 || settings.remote_height < 2 {
             return Err("remote_width and remote_height must be at least 2".into());
@@ -109,8 +122,9 @@ fn main() {
         path => {
             #[cfg(windows)]
             let _ = bamf_proto::log::to_file(&windows::app::log_path());
-            Config::load(&config_path(path).to_string_lossy())
-                .and_then(|c| Settings::from_config(&c))
+            let path = config_path(path);
+            Config::load(&path.to_string_lossy())
+                .and_then(|c| Settings::from_config(&c, path))
                 .and_then(run)
         }
     };

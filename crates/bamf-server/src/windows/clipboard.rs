@@ -16,13 +16,17 @@ pub enum Local {
 }
 
 impl Local {
-    /// MIME type and bytes for the client. DIB → PNG conversion happens
-    /// here, off the input thread.
-    pub fn into_wire(self) -> Result<(&'static str, Vec<u8>), image::Error> {
+    /// MIME type and bytes for the client, plus the decoded pixels when
+    /// they were needed anyway (DIB → PNG). Conversion happens here, off
+    /// the input thread.
+    pub fn into_wire(self) -> Result<(&'static str, Vec<u8>, Option<image::Image>), image::Error> {
         Ok(match self {
-            Local::Text(text) => (MIME_TEXT, text.into_bytes()),
-            Local::Png(png) => (MIME_PNG, png),
-            Local::Dib(dib) => (MIME_PNG, image::dib_to_png(&dib)?),
+            Local::Text(text) => (MIME_TEXT, text.into_bytes(), None),
+            Local::Png(png) => (MIME_PNG, png, None),
+            Local::Dib(dib) => {
+                let img = image::dib::decode(&dib)?;
+                (MIME_PNG, image::png::encode(&img), Some(img))
+            }
         })
     }
 }

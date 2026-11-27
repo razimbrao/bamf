@@ -146,6 +146,7 @@ pub const VK_SCROLL: u32 = 0x91;
 pub const SM_CXSCREEN: i32 = 0;
 pub const SM_CYSCREEN: i32 = 1;
 pub const SM_CXSMICON: i32 = 49;
+pub const SM_CXICON: i32 = 11;
 pub const SM_XVIRTUALSCREEN: i32 = 76;
 pub const SM_YVIRTUALSCREEN: i32 = 77;
 pub const SM_CXVIRTUALSCREEN: i32 = 78;
@@ -316,4 +317,229 @@ pub fn wide(s: &str) -> Vec<u16> {
 #[link(name = "bcrypt")]
 extern "system" {
     pub fn BCryptGenRandom(alg: isize, buffer: *mut u8, len: u32, flags: u32) -> i32;
+}
+
+// ---- Settings window: painting, input, monitors, DPI ----
+
+pub type HDC = isize;
+pub type HGDIOBJ = isize;
+pub type HMONITOR = isize;
+pub type MonitorEnumProc = unsafe extern "system" fn(HMONITOR, HDC, *mut RECT, LPARAM) -> BOOL;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct RECT {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+#[repr(C)]
+pub struct PAINTSTRUCT {
+    pub hdc: HDC,
+    pub fErase: BOOL,
+    pub rcPaint: RECT,
+    pub fRestore: BOOL,
+    pub fIncUpdate: BOOL,
+    pub rgbReserved: [u8; 32],
+}
+
+#[repr(C)]
+pub struct BITMAPINFOHEADER {
+    pub biSize: u32,
+    pub biWidth: i32,
+    pub biHeight: i32,
+    pub biPlanes: u16,
+    pub biBitCount: u16,
+    pub biCompression: u32,
+    pub biSizeImage: u32,
+    pub biXPelsPerMeter: i32,
+    pub biYPelsPerMeter: i32,
+    pub biClrUsed: u32,
+    pub biClrImportant: u32,
+}
+
+#[repr(C)]
+pub struct MONITORINFO {
+    pub cbSize: u32,
+    pub rcMonitor: RECT,
+    pub rcWork: RECT,
+    pub dwFlags: u32,
+}
+
+#[repr(C)]
+pub struct TRACKMOUSEEVENT {
+    pub cbSize: u32,
+    pub dwFlags: u32,
+    pub hwndTrack: HWND,
+    pub dwHoverTime: u32,
+}
+
+const _: () = assert!(std::mem::size_of::<PAINTSTRUCT>() == 72);
+const _: () = assert!(std::mem::size_of::<BITMAPINFOHEADER>() == 40);
+
+pub const WM_SETICON: u32 = 0x0080;
+pub const WM_PAINT: u32 = 0x000F;
+pub const WM_CLOSE: u32 = 0x0010;
+pub const WM_ERASEBKGND: u32 = 0x0014;
+pub const WM_SETCURSOR: u32 = 0x0020;
+pub const WM_CHAR: u32 = 0x0102;
+pub const WM_TIMER: u32 = 0x0113;
+pub const WM_MOUSELEAVE: u32 = 0x02A3;
+pub const WM_DPICHANGED: u32 = 0x02E0;
+pub const WM_CAPTURECHANGED: u32 = 0x0215;
+
+pub const WS_CAPTION: u32 = 0x00C0_0000;
+pub const WS_SYSMENU: u32 = 0x0008_0000;
+pub const WS_MINIMIZEBOX: u32 = 0x0002_0000;
+pub const WS_POPUP: u32 = 0x8000_0000;
+pub const WS_EX_TOPMOST: u32 = 0x0000_0008;
+pub const WS_EX_TOOLWINDOW: u32 = 0x0000_0080;
+pub const WS_EX_NOACTIVATE: u32 = 0x0800_0000;
+
+pub const SW_SHOWNOACTIVATE: i32 = 4;
+pub const SW_SHOW: i32 = 5;
+pub const SW_RESTORE: i32 = 9;
+pub const SWP_NOZORDER: u32 = 0x0004;
+pub const SWP_NOACTIVATE: u32 = 0x0010;
+pub const GWLP_USERDATA: i32 = -21;
+pub const ICON_SMALL: usize = 0;
+pub const ICON_BIG: usize = 1;
+pub const IDC_ARROW: usize = 32512;
+pub const IDC_HAND: usize = 32649;
+pub const IDC_SIZEALL: usize = 32646;
+pub const TME_LEAVE: u32 = 0x2;
+pub const MONITORINFOF_PRIMARY: u32 = 0x1;
+
+pub const VK_BACK: i32 = 0x08;
+pub const VK_TAB: i32 = 0x09;
+pub const VK_RETURN: i32 = 0x0D;
+pub const VK_SHIFT: i32 = 0x10;
+pub const VK_CONTROL: i32 = 0x11;
+pub const VK_ESCAPE: i32 = 0x1B;
+pub const VK_LEFT: i32 = 0x25;
+pub const VK_UP: i32 = 0x26;
+pub const VK_RIGHT: i32 = 0x27;
+pub const VK_DOWN: i32 = 0x28;
+pub const VK_DELETE: i32 = 0x2E;
+
+pub const DT_CENTER: u32 = 0x0001;
+pub const DT_RIGHT: u32 = 0x0002;
+pub const DT_VCENTER: u32 = 0x0004;
+pub const DT_SINGLELINE: u32 = 0x0020;
+pub const DT_NOPREFIX: u32 = 0x0800;
+pub const DT_END_ELLIPSIS: u32 = 0x8000;
+pub const TRANSPARENT: i32 = 1;
+pub const SRCCOPY: u32 = 0x00CC_0020;
+pub const DIB_RGB_COLORS: u32 = 0;
+pub const CLEARTYPE_QUALITY: u32 = 5;
+pub const DEFAULT_CHARSET: u32 = 1;
+
+pub const DWMWA_USE_IMMERSIVE_DARK_MODE: u32 = 20;
+pub const DWMWA_BORDER_COLOR: u32 = 34;
+pub const DWMWA_CAPTION_COLOR: u32 = 35;
+pub const DWMWA_TEXT_COLOR: u32 = 36;
+
+#[link(name = "user32")]
+extern "system" {
+    pub fn BeginPaint(hwnd: HWND, ps: *mut PAINTSTRUCT) -> HDC;
+    pub fn EndPaint(hwnd: HWND, ps: *const PAINTSTRUCT) -> BOOL;
+    pub fn InvalidateRect(hwnd: HWND, rect: *const RECT, erase: BOOL) -> BOOL;
+    pub fn ShowWindow(hwnd: HWND, cmd: i32) -> BOOL;
+    pub fn IsIconic(hwnd: HWND) -> BOOL;
+    pub fn DestroyWindow(hwnd: HWND) -> BOOL;
+    pub fn SetCapture(hwnd: HWND) -> HWND;
+    pub fn ReleaseCapture() -> BOOL;
+    pub fn GetDpiForWindow(hwnd: HWND) -> u32;
+    pub fn AdjustWindowRectExForDpi(
+        rect: *mut RECT,
+        style: u32,
+        menu: BOOL,
+        exStyle: u32,
+        dpi: u32,
+    ) -> BOOL;
+    pub fn SetWindowPos(
+        hwnd: HWND,
+        after: HWND,
+        x: i32,
+        y: i32,
+        cx: i32,
+        cy: i32,
+        flags: u32,
+    ) -> BOOL;
+    pub fn LoadCursorW(instance: isize, name: usize) -> HCURSOR;
+    pub fn SetCursor(cursor: HCURSOR) -> HCURSOR;
+    pub fn SetTimer(hwnd: HWND, id: usize, ms: u32, func: *const c_void) -> usize;
+    pub fn KillTimer(hwnd: HWND, id: usize) -> BOOL;
+    pub fn EnumDisplayMonitors(
+        hdc: HDC,
+        clip: *const RECT,
+        func: MonitorEnumProc,
+        data: LPARAM,
+    ) -> BOOL;
+    pub fn GetMonitorInfoW(monitor: HMONITOR, info: *mut MONITORINFO) -> BOOL;
+    pub fn GetKeyState(vk: i32) -> i16;
+    pub fn SetWindowLongPtrW(hwnd: HWND, index: i32, value: isize) -> isize;
+    pub fn GetWindowLongPtrW(hwnd: HWND, index: i32) -> isize;
+    pub fn DrawTextW(hdc: HDC, text: *const u16, len: i32, rect: *mut RECT, format: u32) -> i32;
+    pub fn TrackMouseEvent(tme: *mut TRACKMOUSEEVENT) -> BOOL;
+    pub fn SendMessageW(hwnd: HWND, msg: u32, wParam: WPARAM, lParam: LPARAM) -> LRESULT;
+}
+
+#[link(name = "gdi32")]
+extern "system" {
+    pub fn CreateCompatibleDC(hdc: HDC) -> HDC;
+    pub fn CreateCompatibleBitmap(hdc: HDC, w: i32, h: i32) -> HGDIOBJ;
+    pub fn SelectObject(hdc: HDC, obj: HGDIOBJ) -> HGDIOBJ;
+    pub fn DeleteObject(obj: HGDIOBJ) -> BOOL;
+    pub fn DeleteDC(hdc: HDC) -> BOOL;
+    pub fn BitBlt(
+        dst: HDC,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        src: HDC,
+        sx: i32,
+        sy: i32,
+        rop: u32,
+    ) -> BOOL;
+    pub fn SetDIBitsToDevice(
+        hdc: HDC,
+        x: i32,
+        y: i32,
+        w: u32,
+        h: u32,
+        sx: i32,
+        sy: i32,
+        start: u32,
+        lines: u32,
+        bits: *const c_void,
+        info: *const BITMAPINFOHEADER,
+        usage: u32,
+    ) -> i32;
+    pub fn CreateFontW(
+        height: i32,
+        width: i32,
+        escapement: i32,
+        orientation: i32,
+        weight: i32,
+        italic: u32,
+        underline: u32,
+        strikeout: u32,
+        charset: u32,
+        outPrecision: u32,
+        clipPrecision: u32,
+        quality: u32,
+        pitchAndFamily: u32,
+        face: *const u16,
+    ) -> HGDIOBJ;
+    pub fn SetBkMode(hdc: HDC, mode: i32) -> i32;
+    pub fn SetTextColor(hdc: HDC, color: u32) -> u32;
+}
+
+#[link(name = "dwmapi")]
+extern "system" {
+    pub fn DwmSetWindowAttribute(hwnd: HWND, attr: u32, value: *const c_void, size: u32) -> i32;
 }

@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use super::ffi::*;
-use super::server;
+use super::{server, settings};
 use crate::icon::{self, Look};
 
 /// Sent by the shell when the icon is clicked.
@@ -20,6 +20,7 @@ const WM_REFRESH: u32 = WM_APP + 2;
 
 const ID_TOGGLE: usize = 1;
 const ID_QUIT: usize = 2;
+const ID_SETTINGS: usize = 3;
 const ICON_ID: u32 = 1;
 
 static WINDOW: AtomicIsize = AtomicIsize::new(0);
@@ -206,6 +207,7 @@ fn refresh(hwnd: HWND) {
     unsafe {
         Shell_NotifyIconW(NIM_MODIFY, &data);
     }
+    settings::client_changed(status.client == Client::Connected);
 }
 
 fn toggle_pause() {
@@ -226,8 +228,10 @@ fn show_menu(hwnd: HWND) {
         let client = wide(status.client_line());
         let toggle = wide(toggle_label);
         let quit = wide("Quit");
+        let settings_label = wide("Settings…");
         AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, client.as_ptr());
         AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null());
+        AppendMenuW(menu, MF_STRING, ID_SETTINGS, settings_label.as_ptr());
         let check = if status.paused { MF_CHECKED } else { 0 };
         AppendMenuW(menu, MF_STRING | check, ID_TOGGLE, toggle.as_ptr());
         AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null());
@@ -254,6 +258,7 @@ fn show_menu(hwnd: HWND) {
                 toggle_pause();
                 refresh(hwnd);
             }
+            ID_SETTINGS => settings::open(),
             ID_QUIT => PostQuitMessage(0),
             _ => {}
         }
@@ -298,6 +303,24 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     }
 }
 
+/// The awake imp, for the settings window's title bar.
+pub fn app_icon() -> HICON {
+    icons().active
+}
+
+/// The awake imp at the large-icon size, for the taskbar and Alt+Tab.
+pub fn app_icon_big() -> HICON {
+    static BIG: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *BIG.get_or_init(|| make_icon_sized(Look::Awake, metric(SM_CXICON, 32)) as usize) as HICON
+}
+
+fn metric(index: i32, fallback: usize) -> usize {
+    match unsafe { GetSystemMetrics(index) } {
+        n if n > 0 => n as usize,
+        _ => fallback,
+    }
+}
+
 struct Icons {
     active: HICON,
     waiting: HICON,
@@ -316,10 +339,10 @@ fn icons() -> &'static Icons {
 /// Draws the pixel-art imp at the shell's small-icon size (16 px at 100%
 /// scaling), so the shell does not have to resample it.
 fn make_icon(look: Look) -> HICON {
-    let size = match unsafe { GetSystemMetrics(SM_CXSMICON) } {
-        n if n > 0 => n as usize,
-        _ => 16,
-    };
+    make_icon_sized(look, metric(SM_CXSMICON, 16))
+}
+
+fn make_icon_sized(look: Look, size: usize) -> HICON {
     // The art is fully opaque or fully transparent, so straight and
     // premultiplied alpha are the same; only RGBA -> BGRA is needed.
     let mut bgra = icon::render(look, size);

@@ -28,7 +28,9 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// DIB → PNG, for clipboard images going to the client.
+/// DIB → PNG. The clipboard path decodes the DIB itself to keep the
+/// pixels for the history thumbnail.
+#[cfg(test)]
 pub fn dib_to_png(dib: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(png::encode(&dib::decode(dib)?))
 }

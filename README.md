@@ -27,7 +27,10 @@ Working on Windows 11 → Fedora (GNOME, Wayland):
 - **pause/resume from either side**: a tray icon on Windows, a panel icon
   (GNOME Shell extension) or `bamf-client pause|resume|toggle` on Linux;
 - **clipboard sync both ways**, text and images;
-- optional pixel-to-pixel alignment of the two screens (`remote_offset`).
+- optional pixel-to-pixel alignment of the two screens (`remote_offset`);
+- a **settings window** (tray menu → Settings…): drag the laptop screen next
+  to your monitors, like the OS display settings, and browse the clipboard
+  history (like Win+V).
 
 See [docs/plan.md](docs/plan.md) for the roadmap.
 
@@ -60,7 +63,9 @@ size and side in the server config.
 
 If the laptop sits higher or lower than the monitor, set `remote_offset`
 (pixels from the top of the monitor to the top of the laptop screen) so the
-cursor crosses at the matching height.
+cursor crosses at the matching height. Easier: open **Settings…** from the
+tray menu, drag the Fedora screen into place and press **apply**; the change
+takes effect at once and is saved to `bamf-server.toml`.
 
 ### 4. Allow access
 
@@ -147,7 +152,13 @@ paused from a terminal or a keyboard shortcut:
   elevated window is focused. Run the server as administrator to cover those.
 - `Ctrl+Alt+Del` and `Win+L` always go to Windows (secure desktop).
 - **Tray icon** (Windows): purple = ready, amber = waiting for the client,
-  grey = paused. Right-click for Pause/Resume and Quit.
+  grey = paused. Left click pauses or resumes; right-click for Settings…,
+  Pause/Resume and Quit.
+- **Settings window**: the *screens* tab arranges the screens (drag, or arrow
+  keys: 10 px, Shift+arrow: 1 px; Enter applies). The *clipboard* tab lists
+  the last 25 copies from either computer, plus pinned ones: click one to copy
+  it again (it syncs to the other side too), type to search, Del removes.
+  The history lives in memory only and is gone when bamf quits.
 
 ## Documentation
 

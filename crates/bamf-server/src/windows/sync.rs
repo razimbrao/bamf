@@ -16,7 +16,9 @@ use bamf_proto::{Direction, Key, Message, Session};
 use std::time::Duration;
 
 use super::clipboard;
+use super::settings;
 use super::tray;
+use crate::history::Origin;
 
 struct Shared {
     /// Current connection, with an id so a dying reader only clears its own.
@@ -65,10 +67,17 @@ pub fn connected() -> bool {
     SHARED.get().is_some_and(|s| lock(&s.writer).is_some())
 }
 
-/// Called on the main thread when the local clipboard changed.
+/// Called on the main thread when the local clipboard changed. Read even
+/// without a client, for the history.
 pub fn clipboard_changed() {
-    if connected() {
-        let _ = lock(&shared().changes).send(());
+    let _ = lock(&shared().changes).send(());
+}
+
+/// The next local change goes to the client even if it came from it:
+/// used when an entry is picked from the history.
+pub fn forget_echo() {
+    if let Some(s) = SHARED.get() {
+        lock(&s.guard).forget();
     }
 }
 
@@ -115,6 +124,7 @@ fn read_loop(id: u64, mut stream: TcpStream, receive: Arc<Mutex<Session>>) {
         match msg {
             Ok(Message::Clip { mime, data }) => {
                 lock(&shared().guard).received(&mime, &data);
+                settings::record(&mime, &data, None, Origin::Remote);
                 match clipboard::write(tray::window(), &mime, &data) {
                     Ok(()) => {
                         bamf_proto::info!("clipboard <- client ({mime}, {} bytes)", data.len())
@@ -146,13 +156,17 @@ fn send_loop(changes: Receiver<()>) {
         let Some(local) = clipboard::read(tray::window()) else {
             continue;
         };
-        let (mime, data) = match local.into_wire() {
+        let (mime, data, decoded) = match local.into_wire() {
             Ok(wire) => wire,
             Err(e) => {
                 bamf_proto::warn!("cannot convert the clipboard image: {e}");
                 continue;
             }
         };
+        settings::record(mime, &data, decoded.as_ref(), Origin::Local);
+        if !connected() {
+            continue;
+        }
         if data.len() > MAX_CLIP {
             bamf_proto::warn!("clipboard content too large to sync ({} bytes)", data.len());
             continue;

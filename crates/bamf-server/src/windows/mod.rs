@@ -4,6 +4,7 @@
 pub mod app;
 mod clipboard;
 mod ffi;
+mod settings;
 mod sync;
 mod tray;
 
@@ -287,6 +288,10 @@ pub fn run(settings: Settings) -> Result<(), String> {
         settings.mode
     );
 
+    self::settings::init(
+        settings.config_path.clone(),
+        &format!("{:?}", settings.mode).to_lowercase(),
+    );
     let controller = Controller::new(WinPlatform, geometry, settings.mode, park);
     SERVER
         .set(Mutex::new(Server {

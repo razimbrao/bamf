@@ -27,7 +27,7 @@ impl std::str::FromStr for Side {
 
 impl Side {
     /// True when the shared edge is vertical (screens side by side).
-    fn vertical(self) -> bool {
+    pub fn vertical(self) -> bool {
         matches!(self, Side::Left | Side::Right)
     }
 }

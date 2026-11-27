@@ -74,6 +74,12 @@ impl EchoGuard {
         self.last = Some(fingerprint(mime, data));
     }
 
+    /// Forgets what came from the peer, so the next local change is sent
+    /// even if it is that same content (picked again from the history).
+    pub fn forget(&mut self) {
+        self.last = None;
+    }
+
     /// True when locally changed content should go to the peer.
     pub fn should_send(&mut self, mime: &str, data: &[u8]) -> bool {
         let fp = fingerprint(mime, data);

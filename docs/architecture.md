@@ -28,6 +28,7 @@ dependencies; see [development.md](development.md#zero-dependencies).
 
 Inside the server, `controller.rs` (state machine), `geometry.rs` (edges and
 virtual cursor) and `keymap.rs` are pure logic; `windows/` holds the FFI glue.
+The settings window follows the same split: see [Settings window](#settings-window).
 Inside the client, `state.rs` turns messages into input actions and `linux/`
 writes them to uinput.
 
@@ -145,6 +146,34 @@ carries the state, so both icons always agree.
   with the client.
 - `bamf-server/src/image/` holds DEFLATE (fixed-Huffman LZ77), inflate,
   PNG and DIB code, all tested against data produced by Python's zlib.
+- Every clipboard change, local or from the client, is also added to the
+  history shown in the settings window (`history.rs`), even with no client
+  connected. Picking an entry writes it to the clipboard and clears the echo
+  guard, so it reaches the client even if it originally came from there.
+
+## Settings window
+
+Opened from the tray menu. It is drawn entirely by bamf, in the tray icon's
+pixel-art style, with no common controls:
+
+| File | Role |
+|---|---|
+| `panel.rs` | Tabs, hit testing, keyboard and mouse handling, drawing. Pure. |
+| `layout.rs` | Snapping a dragged screen to a side, offsets, editing the config file. Pure. |
+| `history.rs` | Clipboard history: newest first, duplicates move up, 25 unpinned. Pure. |
+| `canvas.rs`, `pixfont.rs` | Pixel buffer at a whole-number scale, 5x7 pixel font. Pure. |
+| `windows/settings.rs` | The window: copies the buffer to the screen, draws text runs with Consolas, carries out actions. |
+
+The panel draws into a `Canvas` (logical pixels times a whole-number scale
+from the window's DPI) and returns *text runs* for anything that must stay
+readable at any length (clipboard previews, values); the window draws those
+with GDI on top. It all runs on the main thread, next to the input hooks, so
+a repaint is one buffer copy plus a few text calls.
+
+**apply** sets the new geometry on the controller (taking input back from
+the client first) and rewrites only the `remote_side` and `remote_offset`
+lines of the config file, keeping comments. **identify** shows each local
+monitor's number in its corner for two seconds.
 
 ## Key codes
 

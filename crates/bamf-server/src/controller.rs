@@ -175,6 +175,17 @@ impl<P: Platform> Controller<P> {
         });
     }
 
+    pub fn geometry(&self) -> Geometry {
+        self.geometry
+    }
+
+    /// New screen arrangement (from the settings window). Input comes back
+    /// to Windows first if it was on the client.
+    pub fn set_geometry(&mut self, geometry: Geometry) {
+        self.force_local();
+        self.geometry = geometry;
+    }
+
     /// Panic button / shutdown: return to local mode immediately.
     pub fn force_local(&mut self) {
         if self.is_remote() {
